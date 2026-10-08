@@ -1,12 +1,23 @@
 require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
+const cors = require("cors");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+app.use(cors());
+app.use(express.json());
+app.use("/api/auth", require("./routes/auth"));
+
 app.get("/health", (req, res) => {
   res.send("TechMart server is running");
+});
+
+const protect = require("./middleware/auth");
+
+app.get("/api/me", protect, (req, res) => {
+  res.json({ message: "You are logged in", adminId: req.adminId });
 });
 
 mongoose
