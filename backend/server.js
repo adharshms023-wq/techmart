@@ -27,3 +27,4 @@ mongoose
     app.listen(PORT, () => console.log("Server started on port " + PORT));
   })
   .catch((err) => console.log("Database error:", err.message));
+  app.use("/api/products", require("./routes/products"));
