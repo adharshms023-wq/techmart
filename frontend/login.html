@@ -39,9 +39,9 @@
         const data = await res.json();
 
         if (res.ok) {
-          localStorage.setItem("token", data.token);
-          message.classList.add("alert-success");
-          message.textContent = "Welcome, " + data.name;
+         localStorage.setItem("token", data.token);
+localStorage.setItem("adminName", data.name);
+window.location.href = "dashboard.html";
         } else {
           message.classList.add("alert-danger");
           message.textContent = data.message;

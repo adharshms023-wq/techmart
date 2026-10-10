@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TechMart Products</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+  <div class="d-flex">
+    <nav id="sidebar" class="bg-dark text-white p-3 min-vh-100" style="width: 220px;"></nav>
+
+    <div class="flex-grow-1">
+      <header id="topbar" class="bg-white border-bottom px-4 py-3 d-flex justify-content-between align-items-center"></header>
+
+      <main class="p-4">
+        <div id="message" class="alert d-none"></div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <span id="count" class="text-muted"></span>
+          <button class="btn btn-primary" onclick="openAdd()">Add product</button>
+        </div>
+
+        <div class="card shadow-sm">
+          <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Name</th>
+                <th>Brand</th>
+                <th>Category</th>
+                <th>Price</th>
+                <th>Stock</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Add / Edit pop-up -->
+  <div class="modal fade" id="productModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalTitle">Add product</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div id="formError" class="alert alert-danger d-none"></div>
+          <form id="productForm">
+            <input id="name" class="form-control mb-2" placeholder="Name *">
+            <input id="brand" class="form-control mb-2" placeholder="Brand">
+            <input id="category" class="form-control mb-2" placeholder="Category *">
+            <input id="price" type="number" min="0" class="form-control mb-2" placeholder="Price (Rs) *">
+            <input id="stock" type="number" min="0" class="form-control mb-2" placeholder="Stock">
+            <textarea id="description" class="form-control mb-2" rows="2" placeholder="Description"></textarea>
+            <input id="imageUrl" class="form-control" placeholder="Image URL">
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" id="saveBtn" class="btn btn-primary">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    requireLogin();
+    renderLayout("products", "Products");
+
+    const tableBody = document.getElementById("tableBody");
+    const formError = document.getElementById("formError");
+    const form = document.getElementById("productForm");
+    const modal = new bootstrap.Modal(document.getElementById("productModal"));
+
+    let editingId = null;
+
+    function value(id) {
+      return document.getElementById(id).value.trim();
+    }
+
+    function setValue(id, text) {
+      document.getElementById(id).value = text;
+    }
+
+    function showMessage(text, type) {
+      const box = document.getElementById("message");
+      box.className = "alert alert-" + type;
+      box.textContent = text;
+    }
+
+    function addCell(row, text) {
+      const cell = document.createElement("td");
+      cell.textContent = text;
+      row.appendChild(cell);
+      return cell;
+    }
+
+    function openAdd() {
+      editingId = null;
+      document.getElementById("modalTitle").textContent = "Add product";
+      form.reset();
+      formError.classList.add("d-none");
+      modal.show();
+    }
+
+    function openEdit(p) {
+      editingId = p._id;
+      document.getElementById("modalTitle").textContent = "Edit product";
+      setValue("name", p.name);
+      setValue("brand", p.brand || "");
+      setValue("category", p.category);
+      setValue("price", p.price);
+      setValue("stock", p.stock);
+      setValue("description", p.description || "");
+      setValue("imageUrl", p.imageUrl || "");
+      formError.classList.add("d-none");
+      modal.show();
+    }
+
+    async function deleteProduct(p) {
+      if (!confirm('Delete "' + p.name + '"?')) {
+        return;
+      }
+      try {
+        await api("/products/" + p._id, { method: "DELETE" });
+        showMessage("Product deleted", "success");
+        loadProducts();
+      } catch (err) {
+        showMessage(err.message, "danger");
+      }
+    }
+
+    async function loadProducts() {
+      try {
+        const products = await api("/products");
+        document.getElementById("count").textContent = products.length + " products";
+        tableBody.innerHTML = "";
+
+        if (products.length === 0) {
+          tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No products yet</td></tr>';
+          return;
+        }
+
+        products.forEach((p) => {
+          const row = document.createElement("tr");
+          addCell(row, p.name);
+          addCell(row, p.brand || "-");
+          addCell(row, p.category);
+          addCell(row, "Rs " + p.price.toLocaleString("en-IN"));
+
+          const stockCell = addCell(row, "");
+          const badge = document.createElement("span");
+          badge.className = "badge " + (p.stock <= 10 ? "bg-danger" : "bg-success");
+          badge.textContent = p.stock;
+          stockCell.appendChild(badge);
+
+          const actionCell = addCell(row, "");
+
+          const editBtn = document.createElement("button");
+          editBtn.className = "btn btn-sm btn-outline-primary me-1";
+          editBtn.textContent = "Edit";
+          editBtn.addEventListener("click", () => openEdit(p));
+          actionCell.appendChild(editBtn);
+
+          const deleteBtn = document.createElement("button");
+          deleteBtn.className = "btn btn-sm btn-outline-danger";
+          deleteBtn.textContent = "Delete";
+          deleteBtn.addEventListener("click", () => deleteProduct(p));
+          actionCell.appendChild(deleteBtn);
+
+          tableBody.appendChild(row);
+        });
+      } catch (err) {
+        showMessage(err.message, "danger");
+      }
+    }
+
+    document.getElementById("saveBtn").addEventListener("click", async () => {
+      if (!value("name") || !value("category") || value("price") === "") {
+        formError.textContent = "Name, category and price are required";
+        formError.classList.remove("d-none");
+        return;
+      }
+
+      const body = {
+        name: value("name"),
+        brand: value("brand"),
+        category: value("category"),
+        price: Number(value("price")),
+        stock: Number(value("stock") || 0),
+        description: value("description"),
+        imageUrl: value("imageUrl"),
+      };
+
+      try {
+        if (editingId) {
+          await api("/products/" + editingId, { method: "PUT", body: JSON.stringify(body) });
+          showMessage("Product updated", "success");
+        } else {
+          await api("/products", { method: "POST", body: JSON.stringify(body) });
+          showMessage("Product added", "success");
+        }
+        modal.hide();
+        loadProducts();
+      } catch (err) {
+        formError.textContent = err.message;
+        formError.classList.remove("d-none");
+      }
+    });
+
+    loadProducts();
+  </script>
+</body>
+</html>

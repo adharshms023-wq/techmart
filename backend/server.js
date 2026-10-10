@@ -28,3 +28,7 @@ mongoose
   })
   .catch((err) => console.log("Database error:", err.message));
   app.use("/api/products", require("./routes/products"));
+  app.use("/api/orders", require("./routes/orders"));
+  app.use("/api/customers", require("./routes/customers"));
+  app.use("/api/notifications", require("./routes/notifications"));
+  app.use("/api/reports", require("./routes/reports"));
