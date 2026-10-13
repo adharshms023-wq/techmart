@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TechMart Customers</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+  <div class="d-flex">
+    <nav id="sidebar" class="bg-dark text-white p-3 min-vh-100" style="width: 220px;"></nav>
+
+    <div class="flex-grow-1">
+      <header id="topbar" class="bg-white border-bottom px-4 py-3 d-flex justify-content-between align-items-center"></header>
+
+      <main class="p-4">
+        <div id="message" class="alert d-none"></div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <span id="count" class="text-muted"></span>
+          <button class="btn btn-primary" onclick="openAdd()">Add customer</button>
+        </div>
+
+        <div class="card shadow-sm">
+          <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>Address</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Add / Edit pop-up -->
+  <div class="modal fade" id="customerModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalTitle">Add customer</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div id="formError" class="alert alert-danger d-none"></div>
+          <input id="name" class="form-control mb-2" placeholder="Name *">
+          <input id="email" type="email" class="form-control mb-1" placeholder="Email *">
+          <div id="emailNote" class="form-text mb-2 d-none">Email can't be changed, because orders are linked to it.</div>
+          <input id="phone" class="form-control mb-2" placeholder="Phone">
+          <textarea id="address" class="form-control" rows="2" placeholder="Address"></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" id="saveBtn" class="btn btn-primary">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Orders pop-up -->
+  <div class="modal fade" id="ordersModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="ordersTitle">Orders</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p id="ordersSummary" class="text-muted"></p>
+          <table class="table table-sm align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Date</th>
+                <th>Items</th>
+                <th>Total</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="ordersBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    requireLogin();
+    renderLayout("customers", "Customers");
+
+    const tableBody = document.getElementById("tableBody");
+    const formError = document.getElementById("formError");
+    const emailInput = document.getElementById("email");
+    const customerModal = new bootstrap.Modal(document.getElementById("customerModal"));
+    const ordersModal = new bootstrap.Modal(document.getElementById("ordersModal"));
+
+    let editingId = null;
+
+    const BADGE = {
+      pending: "bg-warning text-dark",
+      shipped: "bg-info text-dark",
+      delivered: "bg-success",
+      cancelled: "bg-secondary",
+    };
+
+    function value(id) {
+      return document.getElementById(id).value.trim();
+    }
+
+    function setValue(id, text) {
+      document.getElementById(id).value = text;
+    }
+
+    function showMessage(text, type) {
+      const box = document.getElementById("message");
+      box.className = "alert alert-" + type;
+      box.textContent = text;
+    }
+
+    function addCell(row, text) {
+      const cell = document.createElement("td");
+      cell.textContent = text;
+      row.appendChild(cell);
+      return cell;
+    }
+
+    // ----- Add / Edit -----
+
+    function openAdd() {
+      editingId = null;
+      document.getElementById("modalTitle").textContent = "Add customer";
+      setValue("name", "");
+      setValue("email", "");
+      setValue("phone", "");
+      setValue("address", "");
+      emailInput.readOnly = false;
+      document.getElementById("emailNote").classList.add("d-none");
+      formError.classList.add("d-none");
+      customerModal.show();
+    }
+
+    function openEdit(c) {
+      editingId = c._id;
+      document.getElementById("modalTitle").textContent = "Edit customer";
+      setValue("name", c.name);
+      setValue("email", c.email);
+      setValue("phone", c.phone || "");
+      setValue("address", c.address || "");
+      emailInput.readOnly = true;
+      document.getElementById("emailNote").classList.remove("d-none");
+      formError.classList.add("d-none");
+      customerModal.show();
+    }
+
+    document.getElementById("saveBtn").addEventListener("click", async () => {
+      if (!value("name") || !value("email")) {
+        formError.textContent = "Name and email are required";
+        formError.classList.remove("d-none");
+        return;
+      }
+
+      const body = {
+        name: value("name"),
+        email: value("email"),
+        phone: value("phone"),
+        address: value("address"),
+      };
+
+      try {
+        if (editingId) {
+          await api("/customers/" + editingId, { method: "PUT", body: JSON.stringify(body) });
+          showMessage("Customer updated", "success");
+        } else {
+          await api("/customers", { method: "POST", body: JSON.stringify(body) });
+          showMessage("Customer added", "success");
+        }
+        customerModal.hide();
+        loadCustomers();
+      } catch (err) {
+        formError.textContent = err.message;
+        formError.classList.remove("d-none");
+      }
+    });
+
+    // ----- A customer's orders -----
+
+    async function showOrders(c) {
+      try {
+        const data = await api("/customers/" + c._id + "/orders");
+
+        document.getElementById("ordersTitle").textContent = "Orders of " + c.name;
+        document.getElementById("ordersSummary").textContent =
+          data.orderCount + " orders, total spent Rs " + data.totalSpent.toLocaleString("en-IN") +
+          " (cancelled orders not counted)";
+
+        const body = document.getElementById("ordersBody");
+        body.innerHTML = "";
+
+        if (data.orders.length === 0) {
+          body.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No orders yet</td></tr>';
+        }
+
+        data.orders.forEach((o) => {
+          const row = document.createElement("tr");
+          addCell(row, new Date(o.createdAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }));
+          addCell(row, o.items.map((i) => i.name + " x" + i.quantity).join(", "));
+          addCell(row, "Rs " + o.totalAmount.toLocaleString("en-IN"));
+
+          const statusCell = addCell(row, "");
+          const badge = document.createElement("span");
+          badge.className = "badge " + BADGE[o.status];
+          badge.textContent = o.status;
+          statusCell.appendChild(badge);
+
+          body.appendChild(row);
+        });
+
+        ordersModal.show();
+      } catch (err) {
+        showMessage(err.message, "danger");
+      }
+    }
+
+    // ----- Customer list -----
+
+    async function loadCustomers() {
+      try {
+        const customers = await api("/customers");
+        document.getElementById("count").textContent = customers.length + " customers";
+        tableBody.innerHTML = "";
+
+        if (customers.length === 0) {
+          tableBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No customers yet</td></tr>';
+          return;
+        }
+
+        customers.forEach((c) => {
+          const row = document.createElement("tr");
+          addCell(row, c.name);
+          addCell(row, c.email);
+          addCell(row, c.phone || "-");
+          addCell(row, c.address || "-");
+
+          const actionCell = addCell(row, "");
+
+          const editBtn = document.createElement("button");
+          editBtn.className = "btn btn-sm btn-outline-primary me-1";
+          editBtn.textContent = "Edit";
+          editBtn.addEventListener("click", () => openEdit(c));
+          actionCell.appendChild(editBtn);
+
+          const ordersBtn = document.createElement("button");
+          ordersBtn.className = "btn btn-sm btn-outline-secondary";
+          ordersBtn.textContent = "Orders";
+          ordersBtn.addEventListener("click", () => showOrders(c));
+          actionCell.appendChild(ordersBtn);
+
+          tableBody.appendChild(row);
+        });
+      } catch (err) {
+        showMessage(err.message, "danger");
+      }
+    }
+
+    loadCustomers();
+  </script>
+</body>
+</html>

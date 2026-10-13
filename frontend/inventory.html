@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TechMart Inventory</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+  <div class="d-flex">
+    <nav id="sidebar" class="bg-dark text-white p-3 min-vh-100" style="width: 220px;"></nav>
+
+    <div class="flex-grow-1">
+      <header id="topbar" class="bg-white border-bottom px-4 py-3 d-flex justify-content-between align-items-center"></header>
+
+      <main class="p-4">
+        <div id="message" class="alert d-none"></div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <span id="count" class="text-muted"></span>
+          <div class="d-flex align-items-center">
+            <label for="limit" class="me-2 text-muted">Show stock at or below</label>
+            <input id="limit" type="number" min="0" value="10" class="form-control me-2" style="width: 90px;">
+            <button id="applyBtn" class="btn btn-outline-primary">Apply</button>
+          </div>
+        </div>
+
+        <div class="card shadow-sm">
+          <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Name</th>
+                <th>Category</th>
+                <th>Stock</th>
+                <th>Set new stock</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="js/common.js"></script>
+  <script>
+    requireLogin();
+    renderLayout("inventory", "Inventory");
+
+    const tableBody = document.getElementById("tableBody");
+
+    function showMessage(text, type) {
+      const box = document.getElementById("message");
+      box.className = "alert alert-" + type;
+      box.textContent = text;
+    }
+
+    function addCell(row, text) {
+      const cell = document.createElement("td");
+      cell.textContent = text;
+      row.appendChild(cell);
+      return cell;
+    }
+
+    async function updateStock(product, input) {
+      const newStock = Number(input.value);
+
+      if (input.value === "" || !Number.isInteger(newStock) || newStock < 0) {
+        showMessage("Enter a whole number, 0 or more", "danger");
+        return;
+      }
+
+      try {
+        await api("/products/" + product._id, {
+          method: "PUT",
+          body: JSON.stringify({ stock: newStock }),
+        });
+        showMessage(product.name + ": stock set to " + newStock, "success");
+        loadInventory();
+      } catch (err) {
+        showMessage(err.message, "danger");
+      }
+    }
+
+    async function loadInventory() {
+      try {
+        const limit = Number(document.getElementById("limit").value) || 0;
+        const data = await api("/products/low-stock?limit=" + limit);
+
+        document.getElementById("count").textContent =
+          data.count + " products at or below " + data.limit + " units";
+        tableBody.innerHTML = "";
+
+        if (data.products.length === 0) {
+          tableBody.innerHTML =
+            '<tr><td colspan="4" class="text-center text-muted">No low-stock products</td></tr>';
+          return;
+        }
+
+        data.products.forEach((p) => {
+          const row = document.createElement("tr");
+          addCell(row, p.name);
+          addCell(row, p.category);
+
+          const stockCell = addCell(row, "");
+          const badge = document.createElement("span");
+          badge.className = "badge " + (p.stock === 0 ? "bg-dark" : "bg-danger");
+          badge.textContent = p.stock === 0 ? "Out of stock" : p.stock;
+          stockCell.appendChild(badge);
+
+          const actionCell = addCell(row, "");
+          const group = document.createElement("div");
+          group.className = "input-group input-group-sm";
+          group.style.width = "180px";
+
+          const input = document.createElement("input");
+          input.type = "number";
+          input.min = "0";
+          input.className = "form-control";
+          input.placeholder = "New stock";
+
+          const button = document.createElement("button");
+          button.className = "btn btn-primary";
+          button.textContent = "Update";
+          button.addEventListener("click", () => updateStock(p, input));
+
+          group.appendChild(input);
+          group.appendChild(button);
+          actionCell.appendChild(group);
+
+          tableBody.appendChild(row);
+        });
+      } catch (err) {
+        showMessage(err.message, "danger");
+      }
+    }
+
+    document.getElementById("applyBtn").addEventListener("click", loadInventory);
+
+    loadInventory();
+  </script>
+</body>
+</html>

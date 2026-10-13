@@ -18,7 +18,13 @@
 
         <div class="d-flex justify-content-between align-items-center mb-3">
           <span id="count" class="text-muted"></span>
-          <button class="btn btn-primary" onclick="openAdd()">Add product</button>
+          <div class="d-flex align-items-center">
+            <input id="importLimit" type="number" min="1" max="30" value="10"
+                   class="form-control form-control-sm me-2" style="width: 70px;"
+                   title="How many products to fetch">
+            <button id="importBtn" class="btn btn-outline-secondary me-2">Import from API</button>
+            <button class="btn btn-primary" onclick="openAdd()">Add product</button>
+          </div>
         </div>
 
         <div class="card shadow-sm">
@@ -214,6 +220,35 @@
         formError.classList.remove("d-none");
       }
     });
+
+    async function importProducts() {
+      const limit = Number(document.getElementById("importLimit").value) || 10;
+      const button = document.getElementById("importBtn");
+
+      button.disabled = true;
+      button.textContent = "Importing...";
+
+      try {
+        const data = await api("/products/import?limit=" + limit, { method: "POST" });
+
+        const duplicates = data.skipped.filter((s) => s.reason === "already in the database").length;
+        const invalid = data.skipped.length - duplicates;
+
+        showMessage(
+          "Fetched " + data.fetched + ": " + data.imported + " imported, " +
+          duplicates + " already in the database, " + invalid + " invalid",
+          data.imported > 0 ? "success" : "warning"
+        );
+        loadProducts();
+      } catch (err) {
+        showMessage(err.message, "danger");
+      } finally {
+        button.disabled = false;
+        button.textContent = "Import from API";
+      }
+    }
+
+    document.getElementById("importBtn").addEventListener("click", importProducts);
 
     loadProducts();
   </script>

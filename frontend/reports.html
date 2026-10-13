@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TechMart Reports</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --series-1: #2a78d6;
+      --text-secondary: #52514e;
+      --grid: #e1e0d9;
+      --axis: #c3c2b7;
+    }
+  </style>
+</head>
+<body class="bg-light">
+  <div class="d-flex">
+    <nav id="sidebar" class="bg-dark text-white p-3 min-vh-100" style="width: 220px;"></nav>
+
+    <div class="flex-grow-1">
+      <header id="topbar" class="bg-white border-bottom px-4 py-3 d-flex justify-content-between align-items-center"></header>
+
+      <main class="p-4">
+        <div id="message" class="alert d-none"></div>
+        <p class="text-muted small">Cancelled orders are not counted in any chart.</p>
+
+        <div class="row g-3">
+          <!-- Sales per day -->
+          <div class="col-lg-7">
+            <div class="card shadow-sm h-100">
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <h6 class="mb-0">Revenue per day</h6>
+                  <div class="d-flex align-items-center">
+                    <select id="days" class="form-select form-select-sm me-2" style="width: 130px;">
+                      <option value="7">Last 7 days</option>
+                      <option value="14">Last 14 days</option>
+                      <option value="30">Last 30 days</option>
+                    </select>
+                    <button id="salesTableBtn" class="btn btn-sm btn-outline-secondary">Show table</button>
+                  </div>
+                </div>
+                <div style="position: relative; height: 320px;">
+                  <canvas id="salesChart" aria-label="Bar chart of revenue per day" role="img"></canvas>
+                </div>
+                <p id="salesNote" class="text-muted small mt-2 mb-0"></p>
+                <div id="salesTableBox" class="mt-3 d-none">
+                  <table class="table table-sm mb-0">
+                    <thead class="table-light"><tr><th>Date</th><th>Orders</th><th>Revenue</th></tr></thead>
+                    <tbody id="salesTableBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Top products -->
+          <div class="col-lg-5">
+            <div class="card shadow-sm h-100">
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <h6 class="mb-0">Top products by units sold</h6>
+                  <button id="topTableBtn" class="btn btn-sm btn-outline-secondary">Show table</button>
+                </div>
+                <div style="position: relative; height: 320px;">
+                  <canvas id="topChart" aria-label="Bar chart of units sold per product" role="img"></canvas>
+                </div>
+                <p id="topNote" class="text-muted small mt-2 mb-0"></p>
+                <div id="topTableBox" class="mt-3 d-none">
+                  <table class="table table-sm mb-0">
+                    <thead class="table-light"><tr><th>Product</th><th>Units</th><th>Revenue</th></tr></thead>
+                    <tbody id="topTableBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    requireLogin();
+    renderLayout("reports", "Reports");
+
+    const css = getComputedStyle(document.documentElement);
+    const COLOR = css.getPropertyValue("--series-1").trim();
+    const TEXT = css.getPropertyValue("--text-secondary").trim();
+    const GRID = css.getPropertyValue("--grid").trim();
+    const AXIS = css.getPropertyValue("--axis").trim();
+
+    Chart.defaults.font.family = "system-ui, -apple-system, 'Segoe UI', sans-serif";
+    Chart.defaults.color = TEXT;
+
+    let salesChart = null;
+    let topChart = null;
+
+    function showMessage(text, type) {
+      const box = document.getElementById("message");
+      box.className = "alert alert-" + type;
+      box.textContent = text;
+    }
+
+    function rupees(n) {
+      return "Rs " + n.toLocaleString("en-IN");
+    }
+
+    function addCell(row, text) {
+      const cell = document.createElement("td");
+      cell.textContent = text;
+      row.appendChild(cell);
+    }
+
+    // The last N calendar days as YYYY-MM-DD, oldest first
+    function lastDays(n) {
+      const list = [];
+      for (let i = n - 1; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        list.push(d.getFullYear() + "-" + month + "-" + day);
+      }
+      return list;
+    }
+
+    function shortDate(text) {
+      return new Date(text + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+    }
+
+    function toggleTable(boxId, buttonId) {
+      const box = document.getElementById(boxId);
+      const button = document.getElementById(buttonId);
+      box.classList.toggle("d-none");
+      button.textContent = box.classList.contains("d-none") ? "Show table" : "Hide table";
+    }
+
+    // ----- Revenue per day -----
+
+    async function loadSales() {
+      try {
+        const days = Number(document.getElementById("days").value);
+        const data = await api("/reports/sales-by-day?days=" + days);
+
+        const byDate = {};
+        data.forEach((d) => { byDate[d.date] = d; });
+
+        const rows = lastDays(days).map((date) => ({
+          date: date,
+          orders: byDate[date] ? byDate[date].orders : 0,
+          revenue: byDate[date] ? byDate[date].revenue : 0,
+        }));
+
+        const total = rows.reduce((sum, r) => sum + r.revenue, 0);
+        document.getElementById("salesNote").textContent =
+          total === 0 ? "No sales in this period." : "Total in this period: " + rupees(total);
+
+        if (salesChart) { salesChart.destroy(); }
+        salesChart = new Chart(document.getElementById("salesChart"), {
+          type: "bar",
+          data: {
+            labels: rows.map((r) => shortDate(r.date)),
+            datasets: [{
+              label: "Revenue",
+              data: rows.map((r) => r.revenue),
+              backgroundColor: COLOR,
+              borderRadius: { topLeft: 4, topRight: 4 },
+              maxBarThickness: 36,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: (item) => "Revenue: " + rupees(item.parsed.y),
+                  afterLabel: (item) => "Orders: " + rows[item.dataIndex].orders,
+                },
+              },
+            },
+            scales: {
+              x: { grid: { display: false }, border: { color: AXIS }, ticks: { color: TEXT } },
+              y: {
+                beginAtZero: true,
+                grid: { color: GRID },
+                border: { display: false },
+                ticks: { color: TEXT, callback: (v) => rupees(v) },
+              },
+            },
+          },
+        });
+
+        const body = document.getElementById("salesTableBody");
+        body.innerHTML = "";
+        rows.forEach((r) => {
+          const row = document.createElement("tr");
+          addCell(row, shortDate(r.date));
+          addCell(row, r.orders);
+          addCell(row, rupees(r.revenue));
+          body.appendChild(row);
+        });
+      } catch (err) {
+        showMessage(err.message, "danger");
+      }
+    }
+
+    // ----- Top products -----
+
+    async function loadTop() {
+      try {
+        const products = await api("/reports/top-products?limit=5");
+
+        document.getElementById("topNote").textContent =
+          products.length === 0 ? "No sales yet." : "Top " + products.length + " products";
+
+        if (topChart) { topChart.destroy(); }
+        topChart = new Chart(document.getElementById("topChart"), {
+          type: "bar",
+          data: {
+            labels: products.map((p) => p.name),
+            datasets: [{
+              label: "Units sold",
+              data: products.map((p) => p.unitsSold),
+              backgroundColor: COLOR,
+              borderRadius: { topRight: 4, bottomRight: 4 },
+              maxBarThickness: 28,
+            }],
+          },
+          options: {
+            indexAxis: "y",
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: (item) => "Units sold: " + item.parsed.x,
+                  afterLabel: (item) => "Revenue: " + rupees(products[item.dataIndex].revenue),
+                },
+              },
+            },
+            scales: {
+              x: {
+                beginAtZero: true,
+                grid: { color: GRID },
+                border: { display: false },
+                ticks: { color: TEXT, precision: 0 },
+              },
+              y: { grid: { display: false }, border: { color: AXIS }, ticks: { color: TEXT } },
+            },
+          },
+        });
+
+        const body = document.getElementById("topTableBody");
+        body.innerHTML = "";
+        products.forEach((p) => {
+          const row = document.createElement("tr");
+          addCell(row, p.name);
+          addCell(row, p.unitsSold);
+          addCell(row, rupees(p.revenue));
+          body.appendChild(row);
+        });
+      } catch (err) {
+        showMessage(err.message, "danger");
+      }
+    }
+
+    document.getElementById("days").addEventListener("change", loadSales);
+    document.getElementById("salesTableBtn").addEventListener("click", () => toggleTable("salesTableBox", "salesTableBtn"));
+    document.getElementById("topTableBtn").addEventListener("click", () => toggleTable("topTableBox", "topTableBtn"));
+
+    loadSales();
+    loadTop();
+  </script>
+</body>
+</html>

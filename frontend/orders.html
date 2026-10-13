@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TechMart Orders</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+  <div class="d-flex">
+    <nav id="sidebar" class="bg-dark text-white p-3 min-vh-100" style="width: 220px;"></nav>
+
+    <div class="flex-grow-1">
+      <header id="topbar" class="bg-white border-bottom px-4 py-3 d-flex justify-content-between align-items-center"></header>
+
+      <main class="p-4">
+        <div id="message" class="alert d-none"></div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <span id="count" class="text-muted"></span>
+          <button class="btn btn-primary" onclick="openNewOrder()">New order</button>
+        </div>
+
+        <div class="card shadow-sm">
+          <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Date</th>
+                <th>Customer</th>
+                <th>Items</th>
+                <th>Total</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- New order pop-up -->
+  <div class="modal fade" id="orderModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">New order</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div id="orderError" class="alert alert-danger d-none"></div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-md-6">
+              <input id="customerName" class="form-control" placeholder="Customer name *">
+            </div>
+            <div class="col-md-6">
+              <input id="customerEmail" type="email" class="form-control" placeholder="Customer email">
+            </div>
+          </div>
+
+          <div class="fw-bold mb-2">Products</div>
+          <div id="itemRows"></div>
+          <button type="button" id="addRowBtn" class="btn btn-sm btn-outline-secondary">+ Add another product</button>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" id="placeBtn" class="btn btn-primary">Place order</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    requireLogin();
+    renderLayout("orders", "Orders");
+
+    const tableBody = document.getElementById("tableBody");
+    const itemRows = document.getElementById("itemRows");
+    const orderError = document.getElementById("orderError");
+    const modal = new bootstrap.Modal(document.getElementById("orderModal"));
+
+    let products = [];
+
+    const NEXT_MOVES = {
+      pending: [
+        { status: "shipped", label: "Mark shipped", cls: "btn-outline-primary" },
+        { status: "cancelled", label: "Cancel", cls: "btn-outline-danger" },
+      ],
+      shipped: [{ status: "delivered", label: "Mark delivered", cls: "btn-outline-success" }],
+      delivered: [],
+      cancelled: [],
+    };
+
+    const BADGE = {
+      pending: "bg-warning text-dark",
+      shipped: "bg-info text-dark",
+      delivered: "bg-success",
+      cancelled: "bg-secondary",
+    };
+
+    function showMessage(text, type) {
+      const box = document.getElementById("message");
+      box.className = "alert alert-" + type;
+      box.textContent = text;
+    }
+
+    function showOrderError(text) {
+      orderError.textContent = text;
+      orderError.classList.remove("d-none");
+    }
+
+    function addCell(row, text) {
+      const cell = document.createElement("td");
+      cell.textContent = text;
+      row.appendChild(cell);
+      return cell;
+    }
+
+    // ----- New order form -----
+
+    function addItemRow() {
+      const row = document.createElement("div");
+      row.className = "input-group mb-2 item-row";
+
+      const select = document.createElement("select");
+      select.className = "form-select";
+
+      const first = document.createElement("option");
+      first.value = "";
+      first.textContent = "Choose a product";
+      select.appendChild(first);
+
+      products.forEach((p) => {
+        const option = document.createElement("option");
+        option.value = p._id;
+        if (p.stock === 0) {
+          option.disabled = true;
+          option.textContent = p.name + " (out of stock)";
+        } else {
+          option.textContent = p.name + " (stock " + p.stock + ")";
+        }
+        select.appendChild(option);
+      });
+
+      const quantity = document.createElement("input");
+      quantity.type = "number";
+      quantity.min = "1";
+      quantity.value = "1";
+      quantity.className = "form-control";
+      quantity.style.maxWidth = "90px";
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "btn btn-outline-danger";
+      remove.textContent = "x";
+      remove.addEventListener("click", () => row.remove());
+
+      row.appendChild(select);
+      row.appendChild(quantity);
+      row.appendChild(remove);
+      itemRows.appendChild(row);
+    }
+
+    async function openNewOrder() {
+      try {
+        products = await api("/products");
+      } catch (err) {
+        showMessage(err.message, "danger");
+        return;
+      }
+      document.getElementById("customerName").value = "";
+      document.getElementById("customerEmail").value = "";
+      itemRows.innerHTML = "";
+      orderError.classList.add("d-none");
+      addItemRow();
+      modal.show();
+    }
+
+    document.getElementById("addRowBtn").addEventListener("click", addItemRow);
+
+    document.getElementById("placeBtn").addEventListener("click", async () => {
+      const customerName = document.getElementById("customerName").value.trim();
+      const customerEmail = document.getElementById("customerEmail").value.trim();
+
+      if (!customerName) {
+        showOrderError("Customer name is required");
+        return;
+      }
+
+      const rows = itemRows.querySelectorAll(".item-row");
+      if (rows.length === 0) {
+        showOrderError("Add at least one product");
+        return;
+      }
+
+      const items = [];
+      const chosen = new Set();
+
+      for (const row of rows) {
+        const productId = row.querySelector("select").value;
+        const quantity = Number(row.querySelector("input").value);
+
+        if (!productId) {
+          showOrderError("Choose a product in every row");
+          return;
+        }
+        if (!Number.isInteger(quantity) || quantity < 1) {
+          showOrderError("Quantity must be a whole number, 1 or more");
+          return;
+        }
+        if (chosen.has(productId)) {
+          showOrderError("Choose each product only once, and raise its quantity instead");
+          return;
+        }
+        chosen.add(productId);
+        items.push({ productId, quantity });
+      }
+
+      try {
+        await api("/orders", {
+          method: "POST",
+          body: JSON.stringify({ customerName, customerEmail, items }),
+        });
+        modal.hide();
+        showMessage("Order placed for " + customerName, "success");
+        loadOrders();
+      } catch (err) {
+        showOrderError(err.message);
+      }
+    });
+
+    // ----- Order list -----
+
+    async function changeStatus(order, move) {
+      if (move.status === "cancelled" && !confirm("Cancel this order? The stock will be returned.")) {
+        return;
+      }
+      try {
+        await api("/orders/" + order._id + "/status", {
+          method: "PUT",
+          body: JSON.stringify({ status: move.status }),
+        });
+        showMessage("Order for " + order.customerName + " is now " + move.status, "success");
+        loadOrders();
+      } catch (err) {
+        showMessage(err.message, "danger");
+      }
+    }
+
+    async function loadOrders() {
+      try {
+        const orders = await api("/orders");
+        document.getElementById("count").textContent = orders.length + " orders";
+        tableBody.innerHTML = "";
+
+        if (orders.length === 0) {
+          tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No orders yet</td></tr>';
+          return;
+        }
+
+        orders.forEach((o) => {
+          const row = document.createElement("tr");
+
+          addCell(row, new Date(o.createdAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }));
+
+          const customerCell = addCell(row, o.customerName);
+          if (o.customerEmail) {
+            const email = document.createElement("small");
+            email.className = "text-muted d-block";
+            email.textContent = o.customerEmail;
+            customerCell.appendChild(email);
+          }
+
+          addCell(row, o.items.map((i) => i.name + " x" + i.quantity).join(", "));
+          addCell(row, "Rs " + o.totalAmount.toLocaleString("en-IN"));
+
+          const statusCell = addCell(row, "");
+          const badge = document.createElement("span");
+          badge.className = "badge " + BADGE[o.status];
+          badge.textContent = o.status;
+          statusCell.appendChild(badge);
+
+          const actionCell = addCell(row, "");
+          const moves = NEXT_MOVES[o.status];
+
+          if (moves.length === 0) {
+            actionCell.textContent = "-";
+          } else {
+            moves.forEach((move) => {
+              const button = document.createElement("button");
+              button.className = "btn btn-sm me-1 " + move.cls;
+              button.textContent = move.label;
+              button.addEventListener("click", () => changeStatus(o, move));
+              actionCell.appendChild(button);
+            });
+          }
+
+          tableBody.appendChild(row);
+        });
+      } catch (err) {
+        showMessage(err.message, "danger");
+      }
+    }
+
+    loadOrders();
+  </script>
+</body>
+</html>
