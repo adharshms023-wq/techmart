@@ -1,208 +1,409 @@
-# TechMart – Admin-Centric E-Commerce Management System
+ # TechMart – Admin-Centric E-Commerce Management System
 
-TechMart is a web-based administrative system for a consumer electronics retailer. It replaces manual handling of products, inventory, orders and customers with one secure, centralized dashboard.
+TechMart is a web-based administrative e-commerce management system designed for a consumer electronics retailer. It provides a centralized platform to manage products, inventory, orders, customers, notifications and sales analytics through a secure admin dashboard.
 
-**Status:** work in progress. The backend is complete, and the frontend is partly built (see [Project status](#project-status)).
+The system replaces manual business operations with an integrated web application powered by Node.js, Express and MongoDB.
+
+**Project Status:** Core development completed. Testing, final verification and deployment are the next steps.
 
 ---
 
-## Tech stack
+## Tech Stack
 
 | Layer | Technology |
 |---|---|
 | Frontend | HTML5, CSS3, JavaScript, Bootstrap 5 |
-| Backend | Node.js, Express |
-| Database | MongoDB Atlas, accessed with Mongoose |
-| Authentication | JWT (JSON Web Tokens), bcryptjs for password hashing |
-| External API | DummyJSON (product import) |
-| Tools | VS Code, Git/GitHub, Thunder Client |
+| Backend | Node.js, Express.js |
+| Database | MongoDB Atlas |
+| ODM | Mongoose |
+| Authentication | JWT (JSON Web Tokens) |
+| Password Security | bcryptjs |
+| Charts | Chart.js |
+| External API | DummyJSON |
+| Development Tools | VS Code, Thunder Client |
+| Version Control | Git and GitHub |
 
 ---
 
-## Features built so far
+## Features
 
-### Backend
-- **Admin login:** passwords are stored as bcrypt hashes, and a successful login returns a JWT that expires after 1 day.
-- **Route guard:** middleware that checks the token on every protected route.
-- **Products:** add, list, view one, edit, delete.
-- **Inventory:** low-stock list (`/api/products/low-stock?limit=10`), sorted with the lowest stock first.
-- **Orders:**
-  - Placing an order checks stock first, then subtracts it, and the server calculates the total.
-  - Status flow: `pending → shipped → delivered`, or `pending → cancelled`.
-  - Cancelling an order puts the stock back.
-- **Customers:** add, list, view, edit, and see a customer's orders with order count and total spent.
-- **Notifications:** alerts are saved automatically for new orders and for products that fall to 10 units or less. They can be filtered to unread and marked as read.
-- **External product API import:** fetches products from DummyJSON, validates them, converts them to the TechMart format (renamed fields, price converted from USD to INR), skips duplicates by name, and saves the rest.
-- **Reports:**
-  - Summary: totals for products, customers, orders, revenue, low-stock count and orders by status.
-  - Top-selling products.
-  - Sales per day (grouped by Indian calendar date).
+### 1. Admin Authentication
+- Secure admin login.
+- Password hashing using bcryptjs.
+- JWT-based authentication.
+- Protected API routes using authentication middleware.
+- Automatic login verification on frontend pages.
+- Logout functionality.
 
-### Frontend
-- Login page.
-- Shared layout: sidebar menu, top bar, logout, and a login check on every page (`js/common.js`).
-- Dashboard with four summary cards (revenue, orders, products, low-stock products).
-- Products page: table with low-stock badges, plus add, edit and delete in a pop-up form.
+### 2. Dashboard
+- Total revenue overview.
+- Total orders.
+- Total products.
+- Low-stock product count.
+- Centralized business overview.
+- Quick access to management modules.
+
+### 3. Product Management
+- Add new products.
+- View all products.
+- View individual product details.
+- Edit existing products.
+- Delete products.
+- Product search and management.
+- Low-stock indicators.
+- Import products from DummyJSON.
+
+### 4. Inventory Management
+- Monitor available product stock.
+- Identify low-stock products.
+- Display products with stock at or below 10 units.
+- Sort products by stock availability.
+- Support inventory monitoring through the dashboard.
+
+### 5. Order Management
+- View all customer orders.
+- View individual order details.
+- Track order status.
+- Update order status.
+- Automatic stock deduction when orders are placed.
+- Restore stock when orders are cancelled.
+
+**Order Status Workflow:**
+
+`Pending → Shipped → Delivered`
+
+`Pending → Cancelled`
+
+### 6. Customer Management
+- Add customers.
+- View customer records.
+- Edit customer details.
+- View individual customer information.
+- Access customer order history.
+- Display order count and total amount spent.
+- Identify customer orders using email addresses.
+
+### 7. Notifications
+- Automatically generate notifications for new orders.
+- Generate low-stock alerts.
+- View all notifications.
+- Filter unread notifications.
+- Mark individual notifications as read.
+- Mark all notifications as read.
+
+### 8. Analytics and Reports
+- View business performance statistics.
+- Monitor total revenue and orders.
+- Analyze order status distribution.
+- Identify top-selling products.
+- View daily sales performance.
+- Visualize sales data using charts.
+
+### 9. External Product API Integration
+- Import products from DummyJSON.
+- Validate imported product information.
+- Convert external product data into the TechMart format.
+- Convert product prices from USD to INR.
+- Prevent duplicate products based on product name.
+- Save imported products to MongoDB.
 
 ---
 
-## Project structure
+## Project Structure
 
-```
+```text
 techmart/
+│
 ├── backend/
-│   ├── models/          Admin, Product, Order, Customer, Notification
-│   ├── routes/          auth, products, orders, customers, notifications, reports
-│   ├── middleware/      auth.js (token guard)
-│   ├── utils/           notify.js (saves notifications)
-│   ├── createAdmin.js   run once to create the first admin
-│   ├── server.js        starts the app
-│   └── .env             secrets (never commit this file)
+│   ├── models/
+│   │   ├── Admin.js
+│   │   ├── Product.js
+│   │   ├── Order.js
+│   │   ├── Customer.js
+│   │   └── Notification.js
+│   │
+│   ├── routes/
+│   │   ├── auth.js
+│   │   ├── products.js
+│   │   ├── orders.js
+│   │   ├── customers.js
+│   │   ├── notifications.js
+│   │   └── reports.js
+│   │
+│   ├── middleware/
+│   │   └── auth.js
+│   │
+│   ├── utils/
+│   │   └── notify.js
+│   │
+│   ├── createAdmin.js
+│   ├── server.js
+│   ├── .env
+│   └── package.json
+│
 └── frontend/
     ├── login.html
     ├── dashboard.html
     ├── products.html
-    └── js/common.js     login check, API helper, sidebar and top bar
+    ├── inventory.html
+    ├── orders.html
+    ├── customers.html
+    ├── notifications.html
+    ├── analytics.html
+    │
+    ├── css/
+    │   └── style.css
+    │
+    └── js/
+        └── common.js
 ```
+
+*Note: Adjust the structure above if your actual filenames or folders differ.*
 
 ---
 
-## Getting started
+## Getting Started
 
-### 1. Requirements
-- Node.js 18 or higher (the import feature uses the built-in `fetch`)
-- A free MongoDB Atlas cluster, with your IP address added under **Network Access**
+### 1. Prerequisites
 
-### 2. Install dependencies
-In the folder that holds `package.json`:
+Make sure you have installed:
 
+- Node.js 18 or higher.
+- npm.
+- MongoDB Atlas account.
+- Git.
+- Visual Studio Code.
+
+### 2. Clone the Repository
+
+```bash
+git clone YOUR_GITHUB_REPOSITORY_URL
+cd techmart
 ```
+
+### 3. Install Dependencies
+
+Navigate to the backend directory:
+
+```bash
+cd backend
+npm install
+```
+
+Required dependencies:
+
+```bash
 npm install express mongoose dotenv cors bcryptjs jsonwebtoken
 ```
 
-### 3. Create the `.env` file
-Create `backend/.env`:
+### 4. Configure Environment Variables
 
-```
-MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/techmart?appName=Cluster0
-JWT_SECRET=choose_a_long_random_secret
+Create a `.env` file inside the backend directory.
+
+```env
+MONGODB_URI=your_mongodb_connection_string
+JWT_SECRET=your_long_random_secret
 PORT=5000
 ```
 
-Add `.env` and `node_modules` to `.gitignore` so secrets never reach GitHub.
+Never expose your MongoDB credentials or JWT secret in public repositories.
 
-### 4. Create the first admin
-Open `backend/createAdmin.js` and set your own admin name, email and password, then run it once:
+### 5. Create the First Admin
 
-```
-cd backend
+Configure the admin credentials in `createAdmin.js` and run:
+
+```bash
 node createAdmin.js
 ```
 
-The default values in that file are for learning only. Change them before sharing or deploying the project.
+Run this script only when creating the initial administrator.
 
-### 5. Start the server
+### 6. Start the Backend Server
 
-```
+```bash
 node server.js
 ```
 
-You should see `MongoDB connected` and `Server started on port 5000`.
+Expected output:
 
-### 6. Open the frontend
-Open `frontend/login.html` in a browser (keep the server running), log in with your admin details, and you will land on the dashboard.
+```text
+MongoDB connected
+Server started on port 5000
+```
+
+### 7. Open the Frontend
+
+Open `frontend/login.html` using a local development server.
+
+Log in using your configured admin credentials to access the dashboard.
 
 ---
 
-## API reference
+## API Reference
 
-All routes except login need the header `Authorization: Bearer <token>`.
+All API routes except the login endpoint require JWT authentication.
 
-### Auth
-| Method | URL | Purpose |
+**Authorization Header:**
+
+```http
+Authorization: Bearer YOUR_JWT_TOKEN
+```
+
+### Authentication
+
+| Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/auth/login` | Log in with `email` and `password`, returns a token |
+| POST | `/api/auth/login` | Admin login |
 
 ### Products
-| Method | URL | Purpose |
+
+| Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/products` | Add a product |
-| GET | `/api/products` | List all products (newest first) |
-| GET | `/api/products/low-stock?limit=10` | Products with stock at or below the limit |
-| GET | `/api/products/:id` | Get one product |
-| PUT | `/api/products/:id` | Edit a product |
-| DELETE | `/api/products/:id` | Delete a product |
-| POST | `/api/products/import?limit=10` | Import products from DummyJSON (maximum 30) |
+| POST | `/api/products` | Add product |
+| GET | `/api/products` | Get all products |
+| GET | `/api/products/low-stock?limit=10` | Get low-stock products |
+| GET | `/api/products/:id` | Get product details |
+| PUT | `/api/products/:id` | Update product |
+| DELETE | `/api/products/:id` | Delete product |
+| POST | `/api/products/import?limit=10` | Import external products |
 
 ### Orders
-| Method | URL | Purpose |
+
+| Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/orders` | Place an order (`customerName`, `customerEmail`, `items: [{ productId, quantity }]`) |
-| GET | `/api/orders` | List all orders |
-| GET | `/api/orders/:id` | Get one order |
-| PUT | `/api/orders/:id/status` | Change status (`{ "status": "shipped" }`) |
+| POST | `/api/orders` | Create an order |
+| GET | `/api/orders` | Get all orders |
+| GET | `/api/orders/:id` | Get order details |
+| PUT | `/api/orders/:id/status` | Update order status |
 
 ### Customers
-| Method | URL | Purpose |
+
+| Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/customers` | Add a customer (email must be unique) |
-| GET | `/api/customers` | List customers |
-| GET | `/api/customers/:id` | Get one customer |
-| PUT | `/api/customers/:id` | Edit a customer |
-| GET | `/api/customers/:id/orders` | A customer's orders, order count and total spent |
+| POST | `/api/customers` | Add customer |
+| GET | `/api/customers` | Get all customers |
+| GET | `/api/customers/:id` | Get customer details |
+| PUT | `/api/customers/:id` | Update customer |
+| GET | `/api/customers/:id/orders` | Get customer order history |
 
 ### Notifications
-| Method | URL | Purpose |
-|---|---|---|
-| GET | `/api/notifications` | List alerts (add `?unread=true` for unread only) |
-| PUT | `/api/notifications/:id/read` | Mark one alert as read |
-| PUT | `/api/notifications/read-all` | Mark all alerts as read |
 
-### Reports
-| Method | URL | Purpose |
+| Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/reports/summary` | Totals, revenue and orders by status |
-| GET | `/api/reports/top-products?limit=5` | Best-selling products by units sold |
-| GET | `/api/reports/sales-by-day?days=7` | Orders and revenue for each day |
+| GET | `/api/notifications` | Get notifications |
+| GET | `/api/notifications?unread=true` | Get unread notifications |
+| PUT | `/api/notifications/:id/read` | Mark notification as read |
+| PUT | `/api/notifications/read-all` | Mark all notifications as read |
+
+### Reports and Analytics
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/reports/summary` | Get business summary |
+| GET | `/api/reports/top-products?limit=5` | Get top-selling products |
+| GET | `/api/reports/sales-by-day?days=7` | Get daily sales data |
 
 ---
 
-## Business rules
+## Business Rules
 
-- **Revenue** counts every order that is not cancelled (pending, shipped and delivered).
-- **Low stock** means 10 units or fewer.
-- **Order status moves:** `pending → shipped | cancelled`, `shipped → delivered`. `delivered` and `cancelled` are final.
-- **Customer orders** are matched by email, so the customer's email must equal the `customerEmail` used on the order.
-- **Imported prices** are converted with `USD_TO_INR = 85`, an approximate fixed rate set in `routes/products.js`. Change it for different prices.
+- Revenue includes pending, shipped and delivered orders.
+- Cancelled orders are excluded from revenue.
+- Low stock is defined as 10 units or fewer.
+- Stock is deducted when an order is created.
+- Stock is restored when an order is cancelled.
+- Delivered and cancelled orders are final.
+- Customer order history is matched using customer email.
+- Imported product prices use a fixed USD-to-INR conversion rate of 85.
+- Duplicate imported products are skipped based on product name.
 
 ---
 
-## Project status
+## Project Workflow
 
-| Part | Status |
+1. Administrator logs into the system.
+2. JWT authentication verifies the administrator.
+3. The dashboard displays business statistics.
+4. The administrator manages products and inventory.
+5. Orders are created and their stock is updated.
+6. Customers and their order histories are managed.
+7. Notifications alert administrators about new orders and low stock.
+8. Analytics generate business insights from stored records.
+
+---
+
+## Project Status
+
+| Module | Status |
 |---|---|
-| Setup, MongoDB connection | Done |
-| Admin login and token guard | Done |
-| Products, low-stock list | Done |
-| Orders and status changes | Done |
-| Customers | Done |
-| Notifications | Done |
-| External product API import | Done |
-| Reports (backend) | Done |
-| Frontend: login, layout, dashboard cards, Products page | Done |
-| Frontend: Inventory page | To do |
-| Frontend: Orders page | To do |
-| Frontend: Customers page | To do |
-| Frontend: Notifications page | To do |
-| Frontend: Analytics page (charts) | To do |
-| Frontend: Import button on the Products page | To do |
-| Testing and bug fixing | To do |
-| Final report and documentation | To do |
+| Project setup and MongoDB connection | Completed |
+| Admin authentication | Completed |
+| JWT authentication middleware | Completed |
+| Product management | Completed |
+| Inventory management | Completed |
+| Order management | Completed |
+| Customer management | Completed |
+| Notifications | Completed |
+| External product API integration | Completed |
+| Dashboard | Completed |
+| Analytics and reports | Completed |
+| Frontend login and shared layout | Completed |
+| Frontend Products page | Completed |
+| Frontend Inventory page | Completed |
+| Frontend Orders page | Completed |
+| Frontend Customers page | Completed |
+| Frontend Notifications page | Completed |
+| Frontend Analytics page | Completed |
+| Product import interface | Completed |
+| Comprehensive testing | Pending verification |
+| Security review | Pending verification |
+| Production deployment | Pending |
 
 ---
 
-## Known limitations
+## Known Limitations
 
-- Order creation checks and subtracts stock in separate steps (no database transaction), so two orders placed at the same instant could oversell a product. This is acceptable for a learning project.
-- The login check in the browser only decides which page to show. The real protection is the token check on the server.
-- The frontend files call `http://localhost:5000`, so the API address must be changed before deploying.
+- Order creation and stock deduction are currently separate database operations, which can create overselling risks during simultaneous orders.
+- Frontend login checks provide navigation control, while actual API protection is enforced by backend JWT middleware.
+- The frontend currently uses a local backend API address that must be updated for production.
+- Product import uses a fixed USD-to-INR exchange rate rather than a live currency API.
+- Inventory availability and sales reports depend on the accuracy of stored database records.
+
+---
+
+## Future Enhancements
+
+- Role-based access control for administrators and staff.
+- Audit logs for tracking administrative activities.
+- Advanced sales forecasting.
+- CSV and Excel report exports.
+- Improved inventory alerts and stock forecasting.
+- Payment gateway integration.
+- Customer-facing shopping interface.
+- Automated email notifications.
+- Production deployment and monitoring.
+
+---
+
+## Learning Outcomes
+
+Through this project, the following concepts and technologies were implemented:
+
+- Full-stack web application development.
+- REST API development using Express.js.
+- MongoDB database design and Mongoose integration.
+- JWT-based authentication.
+- Password hashing and security.
+- CRUD operations.
+- Inventory and order management.
+- External API integration.
+- Data aggregation and analytics.
+- Frontend and backend integration.
+
+---
+
+## Author
+
+Developed as an academic and practical full-stack web development project.
+
+**TechMart – Simplifying E-Commerce Management.**
