@@ -5,7 +5,7 @@ const protect = require("../middleware/auth");
 
 const router = express.Router();
 
-router.use(protect);
+// protect is already applied at the mount level in server.js
 
 // Get current logged-in customer's profile
 router.get("/me", async (req, res) => {

@@ -4,7 +4,7 @@ const protect = require("../middleware/auth");
 
 const router = express.Router();
 
-router.use(protect);
+// protect is already applied at the mount level in server.js
 
 // List alerts (newest first). Use ?unread=true to see only unread ones
 router.get("/", async (req, res) => {

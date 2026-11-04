@@ -8,8 +8,8 @@ const LOW_STOCK_LIMIT = 10;
 
 const router = express.Router();
 
-// Place an order (accessible to customers, guests, and admins)
-router.post("/", protect.optional, async (req, res) => {
+// Place an order (accessible to customers, guests, and admins — protect.optional from server.js)
+router.post("/", async (req, res) => {
   try {
     let { customerName, customerEmail, items, address, phone } = req.body;
 
@@ -91,7 +91,7 @@ router.post("/", protect.optional, async (req, res) => {
 });
 
 // List orders (admin sees all; customer sees only their own)
-router.get("/", protect, async (req, res) => {
+router.get("/", async (req, res) => {
   try {
     let filter = {};
     if (req.userRole !== "admin") {
@@ -105,7 +105,7 @@ router.get("/", protect, async (req, res) => {
 });
 
 // Customer's own order history
-router.get("/my-orders", protect, async (req, res) => {
+router.get("/my-orders", async (req, res) => {
   try {
     const email = req.userRole === "admin" && req.query.email ? req.query.email : req.user.email;
     const orders = await Order.find({ customerEmail: email.toLowerCase() }).sort({ createdAt: -1 });
@@ -116,7 +116,7 @@ router.get("/my-orders", protect, async (req, res) => {
 });
 
 // Get one order
-router.get("/:id", protect, async (req, res) => {
+router.get("/:id", async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
     if (!order) {
@@ -141,7 +141,7 @@ const allowedMoves = {
 };
 
 // Change an order's status (admin only)
-router.put("/:id/status", protect, protect.requireAdmin, async (req, res) => {
+router.put("/:id/status", protect.requireAdmin, async (req, res) => {
   try {
     const { status } = req.body;
 

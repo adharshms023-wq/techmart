@@ -4,8 +4,8 @@ const protect = require("../middleware/auth");
 
 const router = express.Router();
 
-// List all products (public & authenticated)
-router.get("/", protect.optional, async (req, res) => {
+// List all products (public & authenticated — auth handled by server.js mount)
+router.get("/", async (req, res) => {
   try {
     const products = await Product.find().sort({ createdAt: -1 });
     res.json(products);
@@ -15,7 +15,7 @@ router.get("/", protect.optional, async (req, res) => {
 });
 
 // Products that are running low on stock (admin only)
-router.get("/low-stock", protect, protect.requireAdmin, async (req, res) => {
+router.get("/low-stock", protect.requireAdmin, async (req, res) => {
   try {
     const limit = Number(req.query.limit) || 10;
     const products = await Product.find({ stock: { $lte: limit } }).sort({ stock: 1 });
@@ -25,8 +25,8 @@ router.get("/low-stock", protect, protect.requireAdmin, async (req, res) => {
   }
 });
 
-// Get one product (public & authenticated)
-router.get("/:id", protect.optional, async (req, res) => {
+// Get one product (public & authenticated — auth handled by server.js mount)
+router.get("/:id", async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
     if (!product) {
@@ -39,7 +39,7 @@ router.get("/:id", protect.optional, async (req, res) => {
 });
 
 // Add a product (admin only)
-router.post("/", protect, protect.requireAdmin, async (req, res) => {
+router.post("/", protect.requireAdmin, async (req, res) => {
   try {
     const product = await Product.create(req.body);
     res.status(201).json(product);
@@ -49,7 +49,7 @@ router.post("/", protect, protect.requireAdmin, async (req, res) => {
 });
 
 // Edit a product (admin only)
-router.put("/:id", protect, protect.requireAdmin, async (req, res) => {
+router.put("/:id", protect.requireAdmin, async (req, res) => {
   try {
     const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
@@ -65,7 +65,7 @@ router.put("/:id", protect, protect.requireAdmin, async (req, res) => {
 });
 
 // Delete a product (admin only)
-router.delete("/:id", protect, protect.requireAdmin, async (req, res) => {
+router.delete("/:id", protect.requireAdmin, async (req, res) => {
   try {
     const product = await Product.findByIdAndDelete(req.params.id);
     if (!product) {
@@ -81,7 +81,7 @@ router.delete("/:id", protect, protect.requireAdmin, async (req, res) => {
 const USD_TO_INR = 85;
 
 // Import products from external API (admin only)
-router.post("/import", protect, protect.requireAdmin, async (req, res) => {
+router.post("/import", protect.requireAdmin, async (req, res) => {
   try {
     const limit = Math.min(Number(req.query.limit) || 10, 30);
 
