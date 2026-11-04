@@ -130,3 +130,19 @@ async function loadBellCount() {
     // the bell is optional, so ignore errors
   }
 }
+// Public API requests (customer storefront)
+async function publicApi(path, options = {}) {
+  const res = await fetch(API + path, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    }
+  });
+
+  if (!res.ok) {
+    throw new Error(`API Error: ${res.status}`);
+  }
+
+  return await res.json();
+}
