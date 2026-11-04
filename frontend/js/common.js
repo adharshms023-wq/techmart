@@ -1,4 +1,4 @@
-const API = "http://localhost:5000/api";
+const API = "https://techmart-psnj.onrender.com/api";
 
 function getToken() {
   return localStorage.getItem("token");
