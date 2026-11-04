@@ -4,20 +4,8 @@ const protect = require("../middleware/auth");
 
 const router = express.Router();
 
-router.use(protect);
-
-// Add a product
-router.post("/", async (req, res) => {
-  try {
-    const product = await Product.create(req.body);
-    res.status(201).json(product);
-  } catch (err) {
-    res.status(400).json({ message: err.message });
-  }
-});
-
-// List all products
-router.get("/", async (req, res) => {
+// List all products (public & authenticated)
+router.get("/", protect.optional, async (req, res) => {
   try {
     const products = await Product.find().sort({ createdAt: -1 });
     res.json(products);
@@ -26,8 +14,8 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Products that are running low on stock
-router.get("/low-stock", async (req, res) => {
+// Products that are running low on stock (admin only)
+router.get("/low-stock", protect, protect.requireAdmin, async (req, res) => {
   try {
     const limit = Number(req.query.limit) || 10;
     const products = await Product.find({ stock: { $lte: limit } }).sort({ stock: 1 });
@@ -37,8 +25,8 @@ router.get("/low-stock", async (req, res) => {
   }
 });
 
-// Get one product
-router.get("/:id", async (req, res) => {
+// Get one product (public & authenticated)
+router.get("/:id", protect.optional, async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
     if (!product) {
@@ -50,8 +38,18 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// Edit a product
-router.put("/:id", async (req, res) => {
+// Add a product (admin only)
+router.post("/", protect, protect.requireAdmin, async (req, res) => {
+  try {
+    const product = await Product.create(req.body);
+    res.status(201).json(product);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// Edit a product (admin only)
+router.put("/:id", protect, protect.requireAdmin, async (req, res) => {
   try {
     const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
@@ -66,8 +64,8 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// Delete a product
-router.delete("/:id", async (req, res) => {
+// Delete a product (admin only)
+router.delete("/:id", protect, protect.requireAdmin, async (req, res) => {
   try {
     const product = await Product.findByIdAndDelete(req.params.id);
     if (!product) {
@@ -79,15 +77,14 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-// Approximate rate, change it whenever you like
+// Approximate rate for import
 const USD_TO_INR = 85;
 
-// Import products from an external API
-router.post("/import", async (req, res) => {
+// Import products from external API (admin only)
+router.post("/import", protect, protect.requireAdmin, async (req, res) => {
   try {
     const limit = Math.min(Number(req.query.limit) || 10, 30);
 
-    // Stage 1: fetch
     const response = await fetch(
       "https://dummyjson.com/products?limit=" +
         limit +
@@ -102,20 +99,17 @@ router.post("/import", async (req, res) => {
     const skipped = [];
 
     for (const item of data.products) {
-      // Stage 2: validate
       if (!item.title || !item.category || typeof item.price !== "number" || item.price < 0) {
         skipped.push({ name: item.title || "(no title)", reason: "missing or invalid data" });
         continue;
       }
 
-      // Stage 4a: skip duplicates
       const exists = await Product.findOne({ name: item.title });
       if (exists) {
         skipped.push({ name: item.title, reason: "already in the database" });
         continue;
       }
 
-      // Stage 3: transform, then Stage 4b: save
       await Product.create({
         name: item.title,
         brand: item.brand || "",

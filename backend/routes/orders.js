@@ -1,18 +1,23 @@
 const express = require("express");
 const Order = require("../models/Order");
 const Product = require("../models/Product");
+const Customer = require("../models/Customer");
 const protect = require("../middleware/auth");
 const notify = require("../utils/notify");
 const LOW_STOCK_LIMIT = 10;
 
 const router = express.Router();
 
-router.use(protect);
-
-// Place an order
-router.post("/", async (req, res) => {
+// Place an order (accessible to customers, guests, and admins)
+router.post("/", protect.optional, async (req, res) => {
   try {
-    const { customerName, customerEmail, items } = req.body;
+    let { customerName, customerEmail, items, address, phone } = req.body;
+
+    // Fallback to authenticated user info if not provided
+    if (req.user) {
+      if (!customerName && req.user.name) customerName = req.user.name;
+      if (!customerEmail && req.user.email) customerEmail = req.user.email;
+    }
 
     if (!customerName || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: "Customer name and items are required" });
@@ -46,7 +51,6 @@ router.post("/", async (req, res) => {
     }
 
     // Part 2: subtract the stock
-       // Part 2: subtract the stock
     for (const oi of orderItems) {
       const updated = await Product.findByIdAndUpdate(
         oi.product,
@@ -61,10 +65,24 @@ router.post("/", async (req, res) => {
     // Part 3: save the order
     const order = await Order.create({
       customerName,
-      customerEmail,
+      customerEmail: customerEmail ? customerEmail.trim().toLowerCase() : "",
       items: orderItems,
       totalAmount,
     });
+
+    // Auto-record customer in Customer directory if not existing
+    if (customerEmail) {
+      const existingCustomer = await Customer.findOne({ email: customerEmail.trim().toLowerCase() });
+      if (!existingCustomer) {
+        await Customer.create({
+          name: customerName,
+          email: customerEmail.trim().toLowerCase(),
+          phone: phone || "",
+          address: address || "",
+        }).catch(() => {});
+      }
+    }
+
     await notify("new_order", "New order from " + customerName + ": Rs " + totalAmount);
     res.status(201).json(order);
   } catch (err) {
@@ -72,10 +90,25 @@ router.post("/", async (req, res) => {
   }
 });
 
-// List all orders
-router.get("/", async (req, res) => {
+// List orders (admin sees all; customer sees only their own)
+router.get("/", protect, async (req, res) => {
   try {
-    const orders = await Order.find().sort({ createdAt: -1 });
+    let filter = {};
+    if (req.userRole !== "admin") {
+      filter.customerEmail = req.user.email.toLowerCase();
+    }
+    const orders = await Order.find(filter).sort({ createdAt: -1 });
+    res.json(orders);
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Customer's own order history
+router.get("/my-orders", protect, async (req, res) => {
+  try {
+    const email = req.userRole === "admin" && req.query.email ? req.query.email : req.user.email;
+    const orders = await Order.find({ customerEmail: email.toLowerCase() }).sort({ createdAt: -1 });
     res.json(orders);
   } catch (err) {
     res.status(500).json({ message: "Server error" });
@@ -83,11 +116,15 @@ router.get("/", async (req, res) => {
 });
 
 // Get one order
-router.get("/:id", async (req, res) => {
+router.get("/:id", protect, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
+    }
+    // If customer, verify ownership
+    if (req.userRole !== "admin" && order.customerEmail.toLowerCase() !== req.user.email.toLowerCase()) {
+      return res.status(403).json({ message: "Access forbidden" });
     }
     res.json(order);
   } catch (err) {
@@ -103,8 +140,8 @@ const allowedMoves = {
   cancelled: [],
 };
 
-// Change an order's status
-router.put("/:id/status", async (req, res) => {
+// Change an order's status (admin only)
+router.put("/:id/status", protect, protect.requireAdmin, async (req, res) => {
   try {
     const { status } = req.body;
 
@@ -134,4 +171,5 @@ router.put("/:id/status", async (req, res) => {
     res.status(400).json({ message: "Invalid order id" });
   }
 });
+
 module.exports = router;

@@ -4,15 +4,30 @@ function getToken() {
   return localStorage.getItem("token");
 }
 
+function getUserRole() {
+  return localStorage.getItem("userRole") || (localStorage.getItem("adminName") ? "admin" : "customer");
+}
+
 function requireLogin() {
   if (!getToken()) {
     window.location.href = "login.html";
   }
 }
 
+function requireAdmin() {
+  requireLogin();
+  if (getUserRole() !== "admin") {
+    // If a customer tries to access Admin pages, send them to Customer Storefront
+    window.location.href = "store.html";
+  }
+}
+
 function logout() {
   localStorage.removeItem("token");
   localStorage.removeItem("adminName");
+  localStorage.removeItem("userName");
+  localStorage.removeItem("userEmail");
+  localStorage.removeItem("userRole");
   window.location.href = "login.html";
 }
 
@@ -72,21 +87,31 @@ function renderLayout(activeKey, title) {
 
   document.getElementById("sidebar").innerHTML =
     '<div class="brand"><div class="brand-icon"><i class="bi bi-lightning-charge-fill"></i></div><span>TechMart</span></div>' +
-    '<div class="side-label">Menu</div>' +
-    '<nav>' + links + "</nav>";
+    '<div class="side-label">Admin Management</div>' +
+    '<nav>' + links + "</nav>" +
+    '<hr class="my-3 mx-3 opacity-25" style="border-color: rgba(255,255,255,0.2);">' +
+    '<div class="side-label">Customer View</div>' +
+    '<a href="store.html" class="side-link" title="Open Customer Storefront">' +
+    '<i class="bi bi-shop text-success"></i><span>Customer Store</span>' +
+    '<span class="badge bg-success ms-auto" style="font-size: 0.65rem;">Store</span></a>';
 
-  const name = localStorage.getItem("adminName") || "Admin";
+  const name = localStorage.getItem("adminName") || localStorage.getItem("userName") || "Admin";
   const initial = name.charAt(0).toUpperCase();
 
   document.getElementById("topbar").innerHTML =
+    '<div class="d-flex align-items-center gap-2">' +
     '<h5 class="mb-0">' + title + "</h5>" +
-    '<div class="d-flex align-items-center gap-3">' +
+    '<span class="badge bg-dark-subtle text-dark border ms-2 d-none d-sm-inline-block">Admin Panel</span>' +
+    "</div>" +
+    '<div class="d-flex align-items-center gap-2 gap-sm-3">' +
+    '<a href="store.html" class="btn btn-outline-success btn-sm d-flex align-items-center gap-1" title="Switch to Customer Store">' +
+    '<i class="bi bi-shop"></i><span class="d-none d-md-inline">Customer Store</span></a>' +
     '<a href="notifications.html" class="bell" title="Notifications">' +
     '<i class="bi bi-bell"></i><span id="bellCount" class="bell-count d-none"></span></a>' +
     '<div class="avatar">' + initial + "</div>" +
-    '<span class="fw-semibold">' + name + "</span>" +
+    '<span class="fw-semibold d-none d-md-inline">' + name + "</span>" +
     '<button class="btn btn-outline-secondary btn-sm" onclick="logout()">' +
-    '<i class="bi bi-box-arrow-right"></i> Logout</button>' +
+    '<i class="bi bi-box-arrow-right"></i> <span class="d-none d-sm-inline">Logout</span></button>' +
     "</div>";
 
   loadBellCount();

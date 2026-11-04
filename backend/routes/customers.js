@@ -7,8 +7,38 @@ const router = express.Router();
 
 router.use(protect);
 
-// Add a customer
-router.post("/", async (req, res) => {
+// Get current logged-in customer's profile
+router.get("/me", async (req, res) => {
+  try {
+    const id = req.customerId || req.user.id;
+    const customer = await Customer.findById(id).select("-password");
+    if (!customer) {
+      return res.status(404).json({ message: "Customer profile not found" });
+    }
+    res.json(customer);
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Update current logged-in customer's profile
+router.put("/me", async (req, res) => {
+  try {
+    const id = req.customerId || req.user.id;
+    const { name, phone, address } = req.body;
+    const customer = await Customer.findByIdAndUpdate(
+      id,
+      { name, phone, address },
+      { returnDocument: "after", runValidators: true }
+    ).select("-password");
+    res.json(customer);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// Add a customer (admin only)
+router.post("/", protect.requireAdmin, async (req, res) => {
   try {
     const customer = await Customer.create(req.body);
     res.status(201).json(customer);
@@ -20,20 +50,20 @@ router.post("/", async (req, res) => {
   }
 });
 
-// List all customers
-router.get("/", async (req, res) => {
+// List all customers (admin only)
+router.get("/", protect.requireAdmin, async (req, res) => {
   try {
-    const customers = await Customer.find().sort({ createdAt: -1 });
+    const customers = await Customer.find().select("-password").sort({ createdAt: -1 });
     res.json(customers);
   } catch (err) {
     res.status(500).json({ message: "Server error" });
   }
 });
 
-// Get one customer
-router.get("/:id", async (req, res) => {
+// Get one customer (admin only)
+router.get("/:id", protect.requireAdmin, async (req, res) => {
   try {
-    const customer = await Customer.findById(req.params.id);
+    const customer = await Customer.findById(req.params.id).select("-password");
     if (!customer) {
       return res.status(404).json({ message: "Customer not found" });
     }
@@ -43,13 +73,13 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// Edit a customer
-router.put("/:id", async (req, res) => {
+// Edit a customer (admin only)
+router.put("/:id", protect.requireAdmin, async (req, res) => {
   try {
     const customer = await Customer.findByIdAndUpdate(req.params.id, req.body, {
       returnDocument: "after",
       runValidators: true,
-    });
+    }).select("-password");
     if (!customer) {
       return res.status(404).json({ message: "Customer not found" });
     }
@@ -62,8 +92,8 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// All orders of one customer
-router.get("/:id/orders", async (req, res) => {
+// All orders of one customer (admin only)
+router.get("/:id/orders", protect.requireAdmin, async (req, res) => {
   try {
     const customer = await Customer.findById(req.params.id);
     if (!customer) {
