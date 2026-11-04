@@ -5,67 +5,919 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>TechMart Dashboard</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --brand: #059669;
+      --brand-soft: rgba(5, 150, 105, 0.12);
+      --card-border: #e5e7eb;
+    }
+
+    /* KPI Cards */
+    .kpi-card {
+      background: #ffffff;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .kpi-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+    .kpi-icon-pill {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.35rem;
+    }
+
+    /* Period Filter Pills */
+    .period-btn {
+      border-radius: 20px;
+      font-size: 0.8rem;
+      padding: 3px 12px;
+      font-weight: 500;
+    }
+
+    /* Chart Containers */
+    .chart-container-trend {
+      position: relative;
+      height: 290px;
+      width: 100%;
+    }
+    .chart-container-donut {
+      position: relative;
+      height: 220px;
+      width: 100%;
+    }
+
+    /* Rank badges */
+    .rank-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .rank-1 { background-color: #fef3c7; color: #b45309; }
+    .rank-2 { background-color: #e5e7eb; color: #374151; }
+    .rank-3 { background-color: #ffedd5; color: #c2410c; }
+    .rank-other { background-color: #f3f4f6; color: #6b7280; }
+
+    /* Quick Shortcut Cards */
+    .shortcut-card {
+      background: #ffffff;
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      text-decoration: none;
+      color: inherit;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: all 0.15s ease;
+    }
+    .shortcut-card:hover {
+      background: #f9fafb;
+      border-color: var(--brand);
+      color: var(--brand);
+      transform: translateY(-2px);
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.04);
+    }
+
+    @keyframes spinAnim {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .spin {
+      display: inline-block;
+      animation: spinAnim 0.75s linear infinite;
+    }
+  </style>
 </head>
 <body class="bg-light">
   <div class="d-flex">
+    <!-- Sidebar dynamically injected by common.js -->
     <nav id="sidebar" class="bg-dark text-white p-3 min-vh-100" style="width: 220px;"></nav>
 
     <div class="flex-grow-1">
+      <!-- Topbar dynamically injected by common.js -->
       <header id="topbar" class="bg-white border-bottom px-4 py-3 d-flex justify-content-between align-items-center"></header>
 
       <main class="p-4">
-        <div id="error" class="alert alert-danger d-none"></div>
+        <!-- Error Alert -->
+        <div id="error" class="alert alert-danger alert-dismissible fade show d-none" role="alert">
+          <span id="errorText"></span>
+          <button type="button" class="btn-close" aria-label="Close" onclick="hideError()"></button>
+        </div>
 
+        <!-- Welcome Hero & Quick Action Bar -->
+        <div class="card shadow-sm mb-4 border-0">
+          <div class="card-body p-3 p-md-4">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+              <div>
+                <h4 class="mb-1 fw-bold text-dark d-flex align-items-center gap-2">
+                  <span id="greetingTitle">Welcome back</span>, <span id="adminGreeting" class="text-success">Admin</span> 👋
+                </h4>
+                <p class="text-muted small mb-0">
+                  Store performance overview & live commerce activity for <span id="todayFormatted" class="fw-semibold text-dark"></span>.
+                </p>
+              </div>
+
+              <!-- Quick Action Buttons -->
+              <div class="d-flex align-items-center flex-wrap gap-2">
+                <button id="refreshBtn" class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1" title="Refresh Dashboard">
+                  <i class="bi bi-arrow-clockwise" id="refreshIcon"></i>
+                  <span>Refresh</span>
+                </button>
+                <a href="orders.html" class="btn btn-sm btn-outline-primary d-flex align-items-center gap-1">
+                  <i class="bi bi-bag-plus"></i>
+                  <span>New Order</span>
+                </a>
+                <a href="products.html" class="btn btn-sm btn-success d-flex align-items-center gap-1">
+                  <i class="bi bi-plus-lg"></i>
+                  <span>Add Product</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4 Top Executive KPI Stat Cards -->
+        <div class="row g-3 mb-4">
+          <!-- Total Revenue -->
+          <div class="col-sm-6 col-xl-3">
+            <div class="kpi-card shadow-sm h-100">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="text-muted small fw-medium text-uppercase">Total Revenue</div>
+                  <div class="fs-4 fw-bold text-dark mt-1" id="kpiRevenue">-</div>
+                </div>
+                <div class="kpi-icon-pill bg-success-subtle text-success">
+                  <i class="bi bi-cash-stack"></i>
+                </div>
+              </div>
+              <div class="mt-2 text-muted small d-flex align-items-center gap-1">
+                <i class="bi bi-receipt text-muted"></i>
+                <span id="kpiAov">AOV: -</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Total Orders -->
+          <div class="col-sm-6 col-xl-3">
+            <div class="kpi-card shadow-sm h-100">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="text-muted small fw-medium text-uppercase">Total Orders</div>
+                  <div class="fs-4 fw-bold text-dark mt-1" id="kpiOrders">-</div>
+                </div>
+                <div class="kpi-icon-pill bg-primary-subtle text-primary">
+                  <i class="bi bi-bag-check"></i>
+                </div>
+              </div>
+              <div class="mt-2 text-muted small text-truncate" id="kpiOrdersStatus">
+                -
+              </div>
+            </div>
+          </div>
+
+          <!-- Total Customers -->
+          <div class="col-sm-6 col-xl-3">
+            <div class="kpi-card shadow-sm h-100">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="text-muted small fw-medium text-uppercase">Customers</div>
+                  <div class="fs-4 fw-bold text-dark mt-1" id="kpiCustomers">-</div>
+                </div>
+                <div class="kpi-icon-pill bg-info-subtle text-info">
+                  <i class="bi bi-people"></i>
+                </div>
+              </div>
+              <div class="mt-2 text-muted small">
+                <a href="customers.html" class="text-decoration-none text-muted">Active accounts &rarr;</a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Inventory Health / Low Stock -->
+          <div class="col-sm-6 col-xl-3">
+            <div class="kpi-card shadow-sm h-100">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="text-muted small fw-medium text-uppercase">Inventory Status</div>
+                  <div class="fs-4 fw-bold mt-1" id="kpiLowStock">-</div>
+                </div>
+                <div class="kpi-icon-pill bg-warning-subtle text-warning" id="kpiLowStockIcon">
+                  <i class="bi bi-boxes"></i>
+                </div>
+              </div>
+              <div class="mt-2 text-muted small" id="kpiStockSubtitle">
+                <a href="inventory.html" class="text-decoration-none text-muted">Check inventory &rarr;</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 1: Sales Velocity Trend (Col 8) & Order Status Donut (Col 4) -->
+        <div class="row g-3 mb-4">
+          <!-- Sales Trend Chart -->
+          <div class="col-lg-8">
+            <div class="card shadow-sm h-100">
+              <div class="card-body">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                  <div>
+                    <h6 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                      <i class="bi bi-graph-up text-success"></i> Revenue Velocity
+                    </h6>
+                    <small class="text-muted" id="trendSub">Daily store revenue</small>
+                  </div>
+
+                  <div class="d-flex align-items-center gap-1" id="trendPeriodButtons">
+                    <button type="button" class="btn btn-sm btn-outline-secondary period-btn" data-days="7">7D</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary period-btn" data-days="14">14D</button>
+                    <button type="button" class="btn btn-sm btn-success period-btn active" data-days="30">30D</button>
+                  </div>
+                </div>
+
+                <div class="chart-container-trend">
+                  <canvas id="dashboardTrendChart" aria-label="Revenue velocity trend chart" role="img"></canvas>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top small text-muted">
+                  <span id="trendPeriodTotal">Period Revenue: Rs 0</span>
+                  <a href="reports.html" class="text-success text-decoration-none fw-semibold">
+                    View In-Depth Analytics &rarr;
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Order Status Donut -->
+          <div class="col-lg-4">
+            <div class="card shadow-sm h-100">
+              <div class="card-body d-flex flex-column justify-content-between">
+                <div>
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                      <i class="bi bi-pie-chart text-primary"></i> Order Status
+                    </h6>
+                    <span id="fulfillmentRateBadge" class="badge bg-success-subtle text-success">100% active</span>
+                  </div>
+                  <small class="text-muted d-block mb-3">Fulfillment distribution</small>
+
+                  <div class="chart-container-donut">
+                    <canvas id="dashboardStatusChart" aria-label="Order status donut chart" role="img"></canvas>
+                  </div>
+                </div>
+
+                <!-- Status Pills Breakdown -->
+                <div class="row g-2 text-center small mt-2 pt-2 border-top">
+                  <div class="col-6">
+                    <div class="p-2 rounded bg-light border">
+                      <span class="text-muted small d-block">Delivered</span>
+                      <strong class="text-success" id="statusDeliveredCount">0</strong>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="p-2 rounded bg-light border">
+                      <span class="text-muted small d-block">Shipped</span>
+                      <strong class="text-primary" id="statusShippedCount">0</strong>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="p-2 rounded bg-light border">
+                      <span class="text-muted small d-block">Pending</span>
+                      <strong class="text-warning" id="statusPendingCount">0</strong>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="p-2 rounded bg-light border">
+                      <span class="text-muted small d-block">Cancelled</span>
+                      <strong class="text-danger" id="statusCancelledCount">0</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: Recent Orders (Col 8) & Right Widgets (Col 4) -->
+        <div class="row g-3 mb-4">
+          <!-- Recent Orders Live Table -->
+          <div class="col-lg-8">
+            <div class="card shadow-sm h-100">
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <div>
+                    <h6 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                      <i class="bi bi-clock-history text-primary"></i> Recent Orders
+                    </h6>
+                    <small class="text-muted">Latest live customer transactions</small>
+                  </div>
+                  <a href="orders.html" class="btn btn-sm btn-outline-primary" id="viewAllOrdersBtn">
+                    View All Orders &rarr;
+                  </a>
+                </div>
+
+                <div class="table-responsive">
+                  <table class="table table-hover table-sm align-middle mb-0">
+                    <thead class="table-light">
+                      <tr>
+                        <th>Customer</th>
+                        <th>Items</th>
+                        <th class="text-end">Total</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                      </tr>
+                    </thead>
+                    <tbody id="recentOrdersBody">
+                      <tr><td colspan="5" class="text-center text-muted py-3">Loading recent orders...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Widgets: Top Products & Inventory Watchlist -->
+          <div class="col-lg-4 d-flex flex-column gap-3">
+            <!-- Top Selling Products Widget -->
+            <div class="card shadow-sm flex-grow-1">
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <h6 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                    <i class="bi bi-trophy text-warning"></i> Best Sellers
+                  </h6>
+                  <a href="reports.html" class="text-muted small text-decoration-none">Full list &rarr;</a>
+                </div>
+                <small class="text-muted d-block mb-3">Top products by units sold</small>
+
+                <div id="topProductsWidget" class="d-flex flex-column gap-3">
+                  <div class="text-center text-muted small py-2">Loading best sellers...</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Inventory Watchlist Widget -->
+            <div class="card shadow-sm">
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <h6 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                    <i class="bi bi-exclamation-triangle text-warning"></i> Stock Watchlist
+                  </h6>
+                  <a href="inventory.html" class="text-muted small text-decoration-none">Manage &rarr;</a>
+                </div>
+                <small class="text-muted d-block mb-2">Items requiring restock soon</small>
+
+                <div id="lowStockWidget">
+                  <div class="text-center text-muted small py-2">Checking stock health...</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 3: Quick Navigation Shortcuts Bar -->
         <div class="row g-3">
-          <div class="col-md-3">
-            <div class="card shadow-sm"><div class="card-body">
-              <div class="text-muted small">Total revenue</div>
-              <div class="fs-4 fw-bold" id="revenue">-</div>
-            </div></div>
+          <div class="col-6 col-md-3">
+            <a href="products.html" class="shortcut-card shadow-sm">
+              <div class="kpi-icon-pill bg-success-subtle text-success">
+                <i class="bi bi-box-seam"></i>
+              </div>
+              <div>
+                <strong class="d-block text-dark">Catalog</strong>
+                <span class="small text-muted">Manage products & prices</span>
+              </div>
+            </a>
           </div>
-          <div class="col-md-3">
-            <div class="card shadow-sm"><div class="card-body">
-              <div class="text-muted small">Orders</div>
-              <div class="fs-4 fw-bold" id="orders">-</div>
-            </div></div>
+          <div class="col-6 col-md-3">
+            <a href="inventory.html" class="shortcut-card shadow-sm">
+              <div class="kpi-icon-pill bg-warning-subtle text-warning">
+                <i class="bi bi-boxes"></i>
+              </div>
+              <div>
+                <strong class="d-block text-dark">Inventory</strong>
+                <span class="small text-muted">Stock levels & replenishment</span>
+              </div>
+            </a>
           </div>
-          <div class="col-md-3">
-            <div class="card shadow-sm"><div class="card-body">
-              <div class="text-muted small">Products</div>
-              <div class="fs-4 fw-bold" id="products">-</div>
-            </div></div>
+          <div class="col-6 col-md-3">
+            <a href="customers.html" class="shortcut-card shadow-sm">
+              <div class="kpi-icon-pill bg-primary-subtle text-primary">
+                <i class="bi bi-people"></i>
+              </div>
+              <div>
+                <strong class="d-block text-dark">Customers</strong>
+                <span class="small text-muted">Profiles & purchase history</span>
+              </div>
+            </a>
           </div>
-          <div class="col-md-3">
-            <div class="card shadow-sm"><div class="card-body">
-              <div class="text-muted small">Low-stock products</div>
-              <div class="fs-4 fw-bold text-danger" id="lowStock">-</div>
-            </div></div>
+          <div class="col-6 col-md-3">
+            <a href="reports.html" class="shortcut-card shadow-sm">
+              <div class="kpi-icon-pill bg-info-subtle text-info">
+                <i class="bi bi-bar-chart-line"></i>
+              </div>
+              <div>
+                <strong class="d-block text-dark">Analytics</strong>
+                <span class="small text-muted">Reports, categories & export</span>
+              </div>
+            </a>
           </div>
         </div>
       </main>
     </div>
   </div>
 
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="js/common.js"></script>
   <script>
     requireLogin();
     renderLayout("dashboard", "Dashboard");
 
+    const STATE = {
+      trendDays: 30,
+      summary: null,
+      trendData: [],
+      recentOrders: [],
+      topProducts: [],
+      lowStockProducts: []
+    };
+
+    const THEME = {
+      brand: "#059669",
+      brandSoft: "rgba(5, 150, 105, 0.12)",
+      indigo: "#4f46e5",
+      sky: "#0284c7",
+      amber: "#f59e0b",
+      rose: "#ef4444",
+      grid: "#f3f4f6",
+      axis: "#e5e7eb",
+      text: "#6b7280",
+      statusColors: {
+        delivered: "#10b981",
+        shipped: "#3b82f6",
+        pending: "#f59e0b",
+        cancelled: "#ef4444"
+      }
+    };
+
+    Chart.defaults.font.family = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+    Chart.defaults.color = THEME.text;
+
+    let trendChartInstance = null;
+    let statusChartInstance = null;
+
+    // --- Helpers ---
+    function rupees(n) {
+      return "Rs " + Number(n || 0).toLocaleString("en-IN");
+    }
+
+    function formatDate(dStr) {
+      if (!dStr) return "-";
+      const d = new Date(dStr);
+      return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    }
+
+    function shortDate(dStr) {
+      if (!dStr) return "-";
+      const d = new Date(dStr + "T00:00:00");
+      return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+    }
+
+    function timeAgo(dateStr) {
+      if (!dateStr) return "-";
+      const date = new Date(dateStr);
+      const now = new Date();
+      const diffSecs = Math.floor((now - date) / 1000);
+      if (diffSecs < 60) return "Just now";
+      const diffMins = Math.floor(diffSecs / 60);
+      if (diffMins < 60) return `${diffMins}m ago`;
+      const diffHours = Math.floor(diffMins / 60);
+      if (diffHours < 24) return `${diffHours}h ago`;
+      const diffDays = Math.floor(diffHours / 24);
+      if (diffDays === 1) return "Yesterday";
+      if (diffDays < 7) return `${diffDays}d ago`;
+      return formatDate(dateStr);
+    }
+
+    function showError(msg) {
+      const box = document.getElementById("error");
+      document.getElementById("errorText").textContent = msg;
+      box.classList.remove("d-none");
+    }
+
+    function hideError() {
+      document.getElementById("error").classList.add("d-none");
+    }
+
+    // Set greeting & formatted date
+    function initGreetings() {
+      const hour = new Date().getHours();
+      let greeting = "Good morning";
+      if (hour >= 12 && hour < 17) greeting = "Good afternoon";
+      else if (hour >= 17) greeting = "Good evening";
+
+      document.getElementById("greetingTitle").textContent = greeting;
+      const adminName = localStorage.getItem("adminName") || "Admin";
+      document.getElementById("adminGreeting").textContent = adminName;
+
+      document.getElementById("todayFormatted").textContent =
+        new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    }
+
+    // --- Loaders ---
+
+    // 1. Executive Summary & KPIs
     async function loadSummary() {
       try {
         const s = await api("/reports/summary");
-        document.getElementById("revenue").textContent = "Rs " + s.totalRevenue.toLocaleString("en-IN");
-        document.getElementById("orders").textContent = s.totalOrders;
-        document.getElementById("products").textContent = s.totalProducts;
-        document.getElementById("lowStock").textContent = s.lowStockCount;
+        STATE.summary = s;
+
+        document.getElementById("kpiRevenue").textContent = rupees(s.totalRevenue);
+        document.getElementById("kpiOrders").textContent = `${s.totalOrders} Orders`;
+        document.getElementById("kpiCustomers").textContent = `${s.totalCustomers} Accounts`;
+        document.getElementById("kpiAov").textContent = `Avg Order: ${rupees(s.averageOrderValue || 0)}`;
+
+        const status = s.ordersByStatus || { pending: 0, shipped: 0, delivered: 0, cancelled: 0 };
+        document.getElementById("kpiOrdersStatus").textContent =
+          `${status.delivered || 0} delivered · ${status.shipped || 0} shipped · ${status.pending || 0} pending`;
+
+        // Low stock card
+        const lowStockEl = document.getElementById("kpiLowStock");
+        const lowStockSub = document.getElementById("kpiStockSubtitle");
+        const lowStockIcon = document.getElementById("kpiLowStockIcon");
+
+        if (s.lowStockCount > 0) {
+          lowStockEl.textContent = `${s.lowStockCount} Low Stock`;
+          lowStockEl.className = "fs-4 fw-bold text-danger mt-1";
+          lowStockSub.innerHTML = `<span class="text-danger fw-semibold">Action needed:</span> <a href="inventory.html" class="text-danger">Restock now &rarr;</a>`;
+          lowStockIcon.className = "kpi-icon-pill bg-danger-subtle text-danger";
+        } else {
+          lowStockEl.textContent = `All Healthy`;
+          lowStockEl.className = "fs-4 fw-bold text-success mt-1";
+          lowStockSub.innerHTML = `All ${s.totalProducts || 0} items well stocked`;
+          lowStockIcon.className = "kpi-icon-pill bg-success-subtle text-success";
+        }
+
+        // Status counts for status donut
+        document.getElementById("statusDeliveredCount").textContent = status.delivered || 0;
+        document.getElementById("statusShippedCount").textContent = status.shipped || 0;
+        document.getElementById("statusPendingCount").textContent = status.pending || 0;
+        document.getElementById("statusCancelledCount").textContent = status.cancelled || 0;
+
+        renderStatusChart(status);
       } catch (err) {
-        const box = document.getElementById("error");
-        box.textContent = err.message;
-        box.classList.remove("d-none");
+        showError(err.message);
       }
     }
 
-    loadSummary();
+    // 2. Sales Trend Chart
+    async function loadTrend() {
+      try {
+        const days = STATE.trendDays;
+        const data = await api(`/reports/sales-by-day?days=${days}`);
+        STATE.trendData = data;
+
+        // Build continuous date array
+        const byDate = {};
+        data.forEach(d => { byDate[d.date] = d; });
+
+        const rows = [];
+        for (let i = days - 1; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const yyyy = d.getFullYear();
+          const mm = String(d.getMonth() + 1).padStart(2, "0");
+          const dd = String(d.getDate()).padStart(2, "0");
+          const dateStr = `${yyyy}-${mm}-${dd}`;
+          rows.push({
+            date: dateStr,
+            revenue: byDate[dateStr] ? byDate[dateStr].revenue : 0,
+            orders: byDate[dateStr] ? byDate[dateStr].orders : 0
+          });
+        }
+
+        const periodTotal = rows.reduce((sum, r) => sum + r.revenue, 0);
+        document.getElementById("trendPeriodTotal").textContent =
+          `Period Total (${days}D): ${rupees(periodTotal)}`;
+        document.getElementById("trendSub").textContent =
+          `Daily revenue velocity across last ${days} days`;
+
+        renderTrendChart(rows);
+      } catch (err) {
+        showError("Trend load error: " + err.message);
+      }
+    }
+
+    // 3. Recent Orders
+    async function loadRecentOrders() {
+      try {
+        const orders = await api("/orders");
+        STATE.recentOrders = orders;
+
+        const count = orders.length;
+        document.getElementById("viewAllOrdersBtn").textContent = `View All (${count}) →`;
+
+        const tbody = document.getElementById("recentOrdersBody");
+        tbody.innerHTML = "";
+
+        if (count === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">No orders placed yet.</td></tr>`;
+          return;
+        }
+
+        const recent = orders.slice(0, 6);
+        const statusBadges = {
+          delivered: "bg-success-subtle text-success",
+          shipped: "bg-primary-subtle text-primary",
+          pending: "bg-warning-subtle text-warning",
+          cancelled: "bg-danger-subtle text-danger"
+        };
+
+        recent.forEach(o => {
+          const tr = document.createElement("tr");
+
+          // Items summary
+          let itemsText = "No items";
+          if (o.items && o.items.length > 0) {
+            const first = o.items[0];
+            const extra = o.items.length - 1;
+            itemsText = extra > 0 
+              ? `${first.name} <span class="badge bg-light text-secondary border">+${extra}</span>`
+              : first.name;
+          }
+
+          const badgeCls = statusBadges[o.status] || "bg-secondary";
+          const statusText = o.status ? (o.status.charAt(0).toUpperCase() + o.status.slice(1)) : "Unknown";
+
+          tr.innerHTML = `
+            <td>
+              <div class="fw-semibold text-dark">${o.customerName || "Anonymous"}</div>
+              <small class="text-muted">${o.customerEmail || "-"}</small>
+            </td>
+            <td class="text-truncate" style="max-width: 220px;" title="${o.items ? o.items.map(i => i.name).join(', ') : ''}">
+              ${itemsText}
+            </td>
+            <td class="text-end fw-bold text-success">${rupees(o.totalAmount)}</td>
+            <td><span class="badge ${badgeCls}">${statusText}</span></td>
+            <td class="text-muted small">${timeAgo(o.createdAt)}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        document.getElementById("recentOrdersBody").innerHTML =
+          `<tr><td colspan="5" class="text-center text-muted py-3">Failed to load recent orders.</td></tr>`;
+      }
+    }
+
+    // 4. Top Products Widget
+    async function loadTopProductsWidget() {
+      try {
+        const products = await api("/reports/top-products?limit=4&sortBy=unitsSold");
+        STATE.topProducts = products;
+
+        const container = document.getElementById("topProductsWidget");
+        container.innerHTML = "";
+
+        if (products.length === 0) {
+          container.innerHTML = `<div class="text-center text-muted small py-2">No product sales yet.</div>`;
+          return;
+        }
+
+        const maxUnits = Math.max(...products.map(p => p.unitsSold), 1);
+
+        products.forEach((p, idx) => {
+          const pct = Math.round((p.unitsSold / maxUnits) * 100);
+          const itemDiv = document.createElement("div");
+          itemDiv.innerHTML = `
+            <div class="d-flex align-items-center justify-content-between mb-1">
+              <div class="d-flex align-items-center gap-2">
+                <span class="rank-badge rank-${idx + 1 <= 3 ? idx + 1 : 'other'}">${idx + 1}</span>
+                <span class="fw-semibold text-dark text-truncate" style="max-width: 170px;" title="${p.name}">${p.name}</span>
+              </div>
+              <div class="text-end">
+                <span class="fw-bold text-dark">${p.unitsSold} units</span>
+              </div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <div class="progress flex-grow-1" style="height: 5px;">
+                <div class="progress-bar bg-success" style="width: ${pct}%"></div>
+              </div>
+              <small class="text-muted" style="font-size: 0.75rem;">${rupees(p.revenue)}</small>
+            </div>
+          `;
+          container.appendChild(itemDiv);
+        });
+      } catch (err) {
+        document.getElementById("topProductsWidget").innerHTML =
+          `<div class="text-center text-muted small py-2">Unable to load best sellers.</div>`;
+      }
+    }
+
+    // 5. Stock Watchlist Widget
+    async function loadLowStockWidget() {
+      try {
+        const res = await api("/products/low-stock?limit=10");
+        const list = res.products || [];
+        STATE.lowStockProducts = list;
+
+        const container = document.getElementById("lowStockWidget");
+        container.innerHTML = "";
+
+        if (list.length === 0) {
+          container.innerHTML = `
+            <div class="p-2 rounded bg-success-subtle text-success small d-flex align-items-center gap-2">
+              <i class="bi bi-check-circle-fill"></i>
+              <span>All products are sufficiently stocked.</span>
+            </div>
+          `;
+          return;
+        }
+
+        list.slice(0, 3).forEach(p => {
+          const row = document.createElement("div");
+          row.className = "d-flex justify-content-between align-items-center p-2 rounded bg-light border mb-2";
+          row.innerHTML = `
+            <div class="text-truncate me-2" style="max-width: 180px;">
+              <div class="fw-semibold text-dark small text-truncate" title="${p.name}">${p.name}</div>
+              <small class="text-muted">${p.category || "General"}</small>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <span class="badge ${p.stock <= 5 ? 'bg-danger' : 'bg-warning text-dark'}">${p.stock} left</span>
+              <a href="inventory.html" class="btn btn-xs btn-outline-secondary py-0 px-1" style="font-size: 0.75rem;" title="Restock">
+                <i class="bi bi-box-arrow-up-right"></i>
+              </a>
+            </div>
+          `;
+          container.appendChild(row);
+        });
+      } catch (err) {
+        document.getElementById("lowStockWidget").innerHTML =
+          `<div class="text-center text-muted small py-2">Stock status unavailable.</div>`;
+      }
+    }
+
+    // --- Chart Renderers ---
+
+    function renderTrendChart(rows) {
+      if (trendChartInstance) trendChartInstance.destroy();
+
+      const labels = rows.map(r => shortDate(r.date));
+      const revenues = rows.map(r => r.revenue);
+
+      trendChartInstance = new Chart(document.getElementById("dashboardTrendChart"), {
+        type: "line",
+        data: {
+          labels,
+          datasets: [{
+            label: "Revenue",
+            data: revenues,
+            borderColor: THEME.brand,
+            backgroundColor: THEME.brandSoft,
+            borderWidth: 2.5,
+            fill: true,
+            tension: 0.35,
+            pointRadius: 3,
+            pointHoverRadius: 6,
+            pointBackgroundColor: THEME.brand
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => `Revenue: ${rupees(ctx.parsed.y)}`,
+                afterLabel: (ctx) => `Orders: ${rows[ctx.dataIndex].orders}`
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              border: { color: THEME.axis },
+              ticks: { maxRotation: 45, autoSkip: true }
+            },
+            y: {
+              beginAtZero: true,
+              grid: { color: THEME.grid },
+              border: { display: false },
+              ticks: { callback: (v) => rupees(v) }
+            }
+          }
+        }
+      });
+    }
+
+    function renderStatusChart(statusMap) {
+      if (statusChartInstance) statusChartInstance.destroy();
+
+      const labels = ["Delivered", "Shipped", "Pending", "Cancelled"];
+      const counts = [
+        statusMap.delivered || 0,
+        statusMap.shipped || 0,
+        statusMap.pending || 0,
+        statusMap.cancelled || 0
+      ];
+
+      const total = counts.reduce((a, b) => a + b, 0);
+      const active = (statusMap.delivered || 0) + (statusMap.shipped || 0);
+      const rate = total > 0 ? Math.round((active / total) * 100) : 100;
+
+      document.getElementById("fulfillmentRateBadge").textContent = `${rate}% fulfilled/active`;
+
+      statusChartInstance = new Chart(document.getElementById("dashboardStatusChart"), {
+        type: "doughnut",
+        data: {
+          labels,
+          datasets: [{
+            data: total === 0 ? [1] : counts,
+            backgroundColor: total === 0 ? ["#e5e7eb"] : [
+              THEME.statusColors.delivered,
+              THEME.statusColors.shipped,
+              THEME.statusColors.pending,
+              THEME.statusColors.cancelled
+            ],
+            borderWidth: 2,
+            borderColor: "#ffffff"
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: "70%",
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => {
+                  if (total === 0) return "No orders yet";
+                  const val = counts[ctx.dataIndex];
+                  const pct = Math.round((val / total) * 100);
+                  return `${labels[ctx.dataIndex]}: ${val} (${pct}%)`;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // --- Master Refresh ---
+    async function refreshDashboard() {
+      const icon = document.getElementById("refreshIcon");
+      icon.classList.add("spin");
+      hideError();
+
+      try {
+        await Promise.all([
+          loadSummary(),
+          loadTrend(),
+          loadRecentOrders(),
+          loadTopProductsWidget(),
+          loadLowStockWidget()
+        ]);
+      } catch (err) {
+        showError("Failed to update dashboard: " + err.message);
+      } finally {
+        icon.classList.remove("spin");
+      }
+    }
+
+    // --- Event Listeners ---
+    document.querySelectorAll(".period-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".period-btn").forEach(b => {
+          b.classList.remove("active", "btn-success");
+          b.classList.add("btn-outline-secondary");
+        });
+        btn.classList.add("active", "btn-success");
+        btn.classList.remove("btn-outline-secondary");
+
+        STATE.trendDays = Number(btn.getAttribute("data-days"));
+        loadTrend();
+      });
+    });
+
+    document.getElementById("refreshBtn").addEventListener("click", refreshDashboard);
+
+    // Initial Execution
+    initGreetings();
+    refreshDashboard();
   </script>
 </body>
 </html>

@@ -3,74 +3,615 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TechMart Reports</title>
+  <title>TechMart Analytics & Reports</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
     :root {
-      --series-1: #2a78d6;
-      --text-secondary: #52514e;
-      --grid: #e1e0d9;
-      --axis: #c3c2b7;
+      --series-brand: #059669;
+      --series-indigo: #4f46e5;
+      --series-sky: #0284c7;
+      --series-amber: #f59e0b;
+      --series-rose: #e11d48;
+      --text-muted-custom: #6b7280;
+      --card-border: #e5e7eb;
+      --table-header-bg: #f9fafb;
+    }
+
+    /* KPI metric cards */
+    .kpi-card {
+      background: #ffffff;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      position: relative;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .kpi-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+    .kpi-icon-pill {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.35rem;
+    }
+
+    /* Period Filter Pills */
+    .period-btn {
+      border-radius: 20px;
+      font-size: 0.85rem;
+      padding: 5px 14px;
+      font-weight: 500;
+    }
+
+    /* Chart wrappers */
+    .chart-container-lg {
+      position: relative;
+      height: 330px;
+      width: 100%;
+    }
+    .chart-container-sm {
+      position: relative;
+      height: 280px;
+      width: 100%;
+    }
+
+    /* Rank badges */
+    .rank-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+    .rank-1 { background-color: #fef3c7; color: #b45309; }
+    .rank-2 { background-color: #e5e7eb; color: #374151; }
+    .rank-3 { background-color: #ffedd5; color: #c2410c; }
+    .rank-other { background-color: #f3f4f6; color: #6b7280; }
+
+    /* Custom loading overlay & spin */
+    @keyframes spinAnim {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .spin {
+      display: inline-block;
+      animation: spinAnim 0.75s linear infinite;
+    }
+
+    .loading-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(255, 255, 255, 0.75);
+      backdrop-filter: blur(2px);
+      z-index: 15;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 12px;
+    }
+
+    /* Print styling */
+    @media print {
+      #sidebar, #topbar, .no-print, .period-btn, .btn, .custom-date-box {
+        display: none !important;
+      }
+      body {
+        background: #ffffff !important;
+      }
+      .card {
+        box-shadow: none !important;
+        border: 1px solid #ccc !important;
+        break-inside: avoid;
+      }
+      .print-header {
+        display: block !important;
+      }
+      .chart-container-lg, .chart-container-sm {
+        height: 260px !important;
+      }
     }
   </style>
 </head>
 <body class="bg-light">
   <div class="d-flex">
+    <!-- Sidebar dynamically injected by common.js -->
     <nav id="sidebar" class="bg-dark text-white p-3 min-vh-100" style="width: 220px;"></nav>
 
     <div class="flex-grow-1">
+      <!-- Topbar dynamically injected by common.js -->
       <header id="topbar" class="bg-white border-bottom px-4 py-3 d-flex justify-content-between align-items-center"></header>
 
       <main class="p-4">
-        <div id="message" class="alert d-none"></div>
-        <p class="text-muted small">Cancelled orders are not counted in any chart.</p>
+        <!-- Print Header (Visible only on print) -->
+        <div class="print-header d-none mb-4 pb-2 border-bottom">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <h2 class="h4 mb-0 fw-bold text-dark">TechMart - Analytics & Business Report</h2>
+              <small class="text-muted" id="printReportDate"></small>
+            </div>
+            <div class="text-end">
+              <span class="badge bg-success">Executive Summary</span>
+            </div>
+          </div>
+        </div>
 
-        <div class="row g-3">
-          <!-- Sales per day -->
-          <div class="col-lg-7">
-            <div class="card shadow-sm h-100">
+        <!-- Alert messages container -->
+        <div id="message" class="alert alert-dismissible fade show d-none" role="alert">
+          <span id="messageText"></span>
+          <button type="button" class="btn-close" aria-label="Close" onclick="hideMessage()"></button>
+        </div>
+
+        <!-- Low stock warning alert banner if any -->
+        <div id="lowStockBanner" class="alert alert-warning d-none d-flex align-items-center justify-content-between shadow-sm py-2 px-3 mb-4">
+          <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-exclamation-triangle-fill fs-5 text-warning"></i>
+            <div>
+              <span id="lowStockText" class="fw-semibold">Some items are low on stock.</span>
+              <span class="text-muted small"> Replenish inventory to avoid fulfillment delays.</span>
+            </div>
+          </div>
+          <a href="inventory.html" class="btn btn-sm btn-outline-dark">Open Inventory &rarr;</a>
+        </div>
+
+        <!-- Reports Header & Range Controls Toolbar -->
+        <div class="card shadow-sm mb-4 border-0">
+          <div class="card-body p-3 p-md-4">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+              <div>
+                <h4 class="mb-1 fw-bold text-dark d-flex align-items-center gap-2">
+                  <i class="bi bi-bar-chart-line text-success"></i> Reports & Insights
+                </h4>
+                <p class="text-muted small mb-0">
+                  Real-time sales velocity, fulfillment metrics, product rankings, and category breakdown.
+                </p>
+              </div>
+
+              <!-- Quick Action Toolbar -->
+              <div class="d-flex align-items-center flex-wrap gap-2 no-print">
+                <button id="refreshBtn" class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1" title="Refresh live data">
+                  <i class="bi bi-arrow-clockwise" id="refreshIcon"></i>
+                  <span>Refresh</span>
+                </button>
+
+                <div class="dropdown">
+                  <button class="btn btn-sm btn-outline-primary dropdown-toggle d-flex align-items-center gap-1" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-download"></i>
+                    <span>Export</span>
+                  </button>
+                  <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                    <li><h6 class="dropdown-header">Export Data (.CSV)</h6></li>
+                    <li><button class="dropdown-item" onclick="exportDailySalesCSV()"><i class="bi bi-calendar-event me-2 text-primary"></i>Daily Sales History</button></li>
+                    <li><button class="dropdown-item" onclick="exportTopProductsCSV()"><i class="bi bi-box-seam me-2 text-success"></i>Top Products Report</button></li>
+                    <li><button class="dropdown-item" onclick="exportCategorySalesCSV()"><i class="bi bi-pie-chart me-2 text-info"></i>Category Breakdown</button></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><button class="dropdown-item" onclick="exportFullSummaryCSV()"><i class="bi bi-file-earmark-spreadsheet me-2 text-dark"></i>Full Executive Summary</button></li>
+                  </ul>
+                </div>
+
+                <button class="btn btn-sm btn-outline-dark d-flex align-items-center gap-1" onclick="window.print()" title="Print executive report">
+                  <i class="bi bi-printer"></i>
+                  <span>Print</span>
+                </button>
+              </div>
+            </div>
+
+            <hr class="my-3 opacity-25">
+
+            <!-- Period Range Selector Buttons -->
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+              <div class="d-flex flex-wrap align-items-center gap-1" id="periodBtnGroup">
+                <span class="text-muted small me-2 fw-semibold">Period:</span>
+                <button type="button" class="btn btn-sm btn-outline-secondary period-btn" data-days="7">7 Days</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary period-btn" data-days="14">14 Days</button>
+                <button type="button" class="btn btn-sm btn-success period-btn active" data-days="30">30 Days</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary period-btn" data-days="90">90 Days</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary period-btn" data-days="all">All Time</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary period-btn" id="customRangeBtn">
+                  <i class="bi bi-calendar3 me-1"></i>Custom
+                </button>
+              </div>
+
+              <div class="text-muted small d-flex align-items-center gap-1">
+                <i class="bi bi-shield-check text-success"></i>
+                <span id="periodLabel">Showing: Last 30 days</span>
+              </div>
+            </div>
+
+            <!-- Custom Date Range Expandable Inputs -->
+            <div id="customDateBox" class="custom-date-box mt-3 p-3 bg-light rounded border d-none">
+              <div class="row g-2 align-items-center">
+                <div class="col-sm-auto">
+                  <label class="form-label small text-muted mb-0 fw-semibold">From Date:</label>
+                  <input type="date" id="customStartDate" class="form-control form-control-sm">
+                </div>
+                <div class="col-sm-auto">
+                  <label class="form-label small text-muted mb-0 fw-semibold">To Date:</label>
+                  <input type="date" id="customEndDate" class="form-control form-control-sm">
+                </div>
+                <div class="col-sm-auto align-self-end">
+                  <button id="applyCustomDateBtn" class="btn btn-sm btn-success px-3">Apply Date Range</button>
+                  <button id="cancelCustomDateBtn" class="btn btn-sm btn-outline-secondary ms-1">Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4 KPI Executive Metric Cards -->
+        <div class="row g-3 mb-4">
+          <!-- Total Revenue -->
+          <div class="col-sm-6 col-xl-3">
+            <div class="kpi-card shadow-sm h-100">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="text-muted small fw-medium text-uppercase">Total Revenue</div>
+                  <div class="fs-4 fw-bold text-dark mt-1" id="kpiTotalRevenue">Rs 0</div>
+                </div>
+                <div class="kpi-icon-pill bg-success-subtle text-success">
+                  <i class="bi bi-cash-stack"></i>
+                </div>
+              </div>
+              <div class="mt-2 text-muted small d-flex align-items-center gap-1">
+                <i class="bi bi-info-circle text-muted"></i>
+                <span id="kpiPeriodRevenue">Period: Rs 0</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Total Orders -->
+          <div class="col-sm-6 col-xl-3">
+            <div class="kpi-card shadow-sm h-100">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="text-muted small fw-medium text-uppercase">Total Orders</div>
+                  <div class="fs-4 fw-bold text-dark mt-1" id="kpiTotalOrders">0</div>
+                </div>
+                <div class="kpi-icon-pill bg-primary-subtle text-primary">
+                  <i class="bi bi-bag-check"></i>
+                </div>
+              </div>
+              <div class="mt-2 text-muted small" id="kpiOrdersBreakdown">
+                Active & completed orders
+              </div>
+            </div>
+          </div>
+
+          <!-- Average Order Value (AOV) -->
+          <div class="col-sm-6 col-xl-3">
+            <div class="kpi-card shadow-sm h-100">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="text-muted small fw-medium text-uppercase">Avg Order Value (AOV)</div>
+                  <div class="fs-4 fw-bold text-dark mt-1" id="kpiAvgOrderValue">Rs 0</div>
+                </div>
+                <div class="kpi-icon-pill bg-info-subtle text-info">
+                  <i class="bi bi-receipt"></i>
+                </div>
+              </div>
+              <div class="mt-2 text-muted small">
+                Revenue per active order
+              </div>
+            </div>
+          </div>
+
+          <!-- Units Sold & Active Catalog -->
+          <div class="col-sm-6 col-xl-3">
+            <div class="kpi-card shadow-sm h-100">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="text-muted small fw-medium text-uppercase">Units Sold</div>
+                  <div class="fs-4 fw-bold text-dark mt-1" id="kpiUnitsSold">0</div>
+                </div>
+                <div class="kpi-icon-pill bg-warning-subtle text-warning">
+                  <i class="bi bi-box-seam"></i>
+                </div>
+              </div>
+              <div class="mt-2 text-muted small" id="kpiCatalogCount">
+                Across catalog products
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 1: Sales Trends Chart (Col 8) & Order Status (Col 4) -->
+        <div class="row g-3 mb-4">
+          <!-- Sales Velocity & Revenue Trend -->
+          <div class="col-lg-8">
+            <div class="card shadow-sm h-100 position-relative">
               <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                  <h6 class="mb-0">Revenue per day</h6>
-                  <div class="d-flex align-items-center">
-                    <select id="days" class="form-select form-select-sm me-2" style="width: 130px;">
-                      <option value="7">Last 7 days</option>
-                      <option value="14">Last 14 days</option>
-                      <option value="30">Last 30 days</option>
-                    </select>
-                    <button id="salesTableBtn" class="btn btn-sm btn-outline-secondary">Show table</button>
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                  <div>
+                    <h6 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                      <i class="bi bi-graph-up text-primary"></i> Revenue & Sales Trend
+                    </h6>
+                    <small class="text-muted">Daily performance over selected timeline</small>
+                  </div>
+
+                  <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <!-- Metric view switcher -->
+                    <div class="btn-group btn-group-sm" role="group">
+                      <button type="button" class="btn btn-outline-secondary active" id="btnMetricRevenue">Revenue</button>
+                      <button type="button" class="btn btn-outline-secondary" id="btnMetricOrders">Orders</button>
+                      <button type="button" class="btn btn-outline-secondary" id="btnMetricBoth">Both</button>
+                    </div>
+
+                    <!-- Chart type switcher -->
+                    <div class="btn-group btn-group-sm" role="group">
+                      <button type="button" class="btn btn-outline-secondary active" id="btnTypeBar" title="Bar chart"><i class="bi bi-bar-chart"></i></button>
+                      <button type="button" class="btn btn-outline-secondary" id="btnTypeLine" title="Line chart"><i class="bi bi-activity"></i></button>
+                    </div>
+
+                    <button id="salesTableToggleBtn" class="btn btn-sm btn-outline-secondary">
+                      <i class="bi bi-table me-1"></i>Table
+                    </button>
                   </div>
                 </div>
-                <div style="position: relative; height: 320px;">
-                  <canvas id="salesChart" aria-label="Bar chart of revenue per day" role="img"></canvas>
+
+                <div class="chart-container-lg">
+                  <canvas id="salesChart" aria-label="Sales and Revenue trend chart" role="img"></canvas>
                 </div>
-                <p id="salesNote" class="text-muted small mt-2 mb-0"></p>
-                <div id="salesTableBox" class="mt-3 d-none">
-                  <table class="table table-sm mb-0">
-                    <thead class="table-light"><tr><th>Date</th><th>Orders</th><th>Revenue</th></tr></thead>
-                    <tbody id="salesTableBody"></tbody>
-                  </table>
+
+                <!-- Sales Summary Statistics Bar -->
+                <div class="p-2 mt-3 rounded bg-light border d-flex flex-wrap justify-content-around text-center small">
+                  <div class="px-2 py-1">
+                    <span class="text-muted d-block">Period Total</span>
+                    <strong class="text-dark" id="salesSummaryTotal">Rs 0</strong>
+                  </div>
+                  <div class="border-end d-none d-sm-block"></div>
+                  <div class="px-2 py-1">
+                    <span class="text-muted d-block">Period Orders</span>
+                    <strong class="text-dark" id="salesSummaryOrders">0</strong>
+                  </div>
+                  <div class="border-end d-none d-sm-block"></div>
+                  <div class="px-2 py-1">
+                    <span class="text-muted d-block">Peak Day</span>
+                    <strong class="text-dark" id="salesSummaryPeak">-</strong>
+                  </div>
+                  <div class="border-end d-none d-sm-block"></div>
+                  <div class="px-2 py-1">
+                    <span class="text-muted d-block">Daily Average</span>
+                    <strong class="text-dark" id="salesSummaryDailyAvg">Rs 0</strong>
+                  </div>
+                </div>
+
+                <!-- Expandable Sales Data Table -->
+                <div id="salesTableBox" class="mt-3 d-none border-top pt-3">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="small fw-semibold text-muted">Daily Breakdown Data</div>
+                    <button class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 0.78rem;" onclick="exportDailySalesCSV()">
+                      <i class="bi bi-download me-1"></i>Export CSV
+                    </button>
+                  </div>
+                  <div class="table-responsive" style="max-height: 280px;">
+                    <table class="table table-sm table-hover align-middle mb-0">
+                      <thead class="table-light sticky-top">
+                        <tr>
+                          <th>Date</th>
+                          <th class="text-end">Orders</th>
+                          <th class="text-end">Revenue</th>
+                          <th class="text-end">Avg / Order</th>
+                        </tr>
+                      </thead>
+                      <tbody id="salesTableBody"></tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Top products -->
-          <div class="col-lg-5">
+          <!-- Order Status & Fulfillment Distribution -->
+          <div class="col-lg-4">
+            <div class="card shadow-sm h-100">
+              <div class="card-body d-flex flex-column justify-content-between">
+                <div>
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                      <i class="bi bi-pie-chart text-success"></i> Order Fulfillment
+                    </h6>
+                    <span id="fulfillmentBadge" class="badge bg-success-subtle text-success">100% active</span>
+                  </div>
+                  <small class="text-muted d-block mb-3">Status breakdown of all registered orders</small>
+
+                  <div class="chart-container-sm">
+                    <canvas id="statusChart" aria-label="Order status distribution doughnut chart" role="img"></canvas>
+                  </div>
+                </div>
+
+                <!-- Legend pills breakdown -->
+                <div class="mt-3 pt-2 border-top">
+                  <div class="row g-2 text-center small" id="statusPillsBox">
+                    <div class="col-6">
+                      <div class="p-2 rounded bg-light border">
+                        <span class="text-muted small d-block">Delivered</span>
+                        <span class="fw-bold text-success fs-6" id="statusCountDelivered">0</span>
+                      </div>
+                    </div>
+                    <div class="col-6">
+                      <div class="p-2 rounded bg-light border">
+                        <span class="text-muted small d-block">Shipped</span>
+                        <span class="fw-bold text-primary fs-6" id="statusCountShipped">0</span>
+                      </div>
+                    </div>
+                    <div class="col-6">
+                      <div class="p-2 rounded bg-light border">
+                        <span class="text-muted small d-block">Pending</span>
+                        <span class="fw-bold text-warning fs-6" id="statusCountPending">0</span>
+                      </div>
+                    </div>
+                    <div class="col-6">
+                      <div class="p-2 rounded bg-light border">
+                        <span class="text-muted small d-block">Cancelled</span>
+                        <span class="fw-bold text-danger fs-6" id="statusCountCancelled">0</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="text-muted small mt-2 text-center" style="font-size: 0.75rem;">
+                    * Cancelled orders do not contribute to revenue metrics.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: Top Products (Col 7) & Category Breakdown (Col 5) -->
+        <div class="row g-3 mb-4">
+          <!-- Top Products -->
+          <div class="col-lg-7">
             <div class="card shadow-sm h-100">
               <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                  <h6 class="mb-0">Top products by units sold</h6>
-                  <button id="topTableBtn" class="btn btn-sm btn-outline-secondary">Show table</button>
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                  <div>
+                    <h6 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                      <i class="bi bi-trophy text-warning"></i> Best-Selling Products
+                    </h6>
+                    <small class="text-muted" id="topProductsSub">Ranked by volume & sales</small>
+                  </div>
+
+                  <div class="d-flex align-items-center gap-2">
+                    <!-- Sort by Units vs Revenue -->
+                    <div class="btn-group btn-group-sm" role="group">
+                      <button type="button" class="btn btn-outline-secondary active" id="btnSortUnits">By Units</button>
+                      <button type="button" class="btn btn-outline-secondary" id="btnSortRevenue">By Revenue</button>
+                    </div>
+
+                    <!-- Limit selector -->
+                    <select id="topLimitSelect" class="form-select form-select-sm" style="width: 85px;">
+                      <option value="5">Top 5</option>
+                      <option value="10">Top 10</option>
+                      <option value="15">Top 15</option>
+                    </select>
+
+                    <button id="topTableToggleBtn" class="btn btn-sm btn-outline-secondary">
+                      <i class="bi bi-table me-1"></i>Table
+                    </button>
+                  </div>
                 </div>
-                <div style="position: relative; height: 320px;">
-                  <canvas id="topChart" aria-label="Bar chart of units sold per product" role="img"></canvas>
+
+                <div class="chart-container-lg">
+                  <canvas id="topChart" aria-label="Top products ranking chart" role="img"></canvas>
                 </div>
-                <p id="topNote" class="text-muted small mt-2 mb-0"></p>
-                <div id="topTableBox" class="mt-3 d-none">
-                  <table class="table table-sm mb-0">
-                    <thead class="table-light"><tr><th>Product</th><th>Units</th><th>Revenue</th></tr></thead>
-                    <tbody id="topTableBody"></tbody>
+
+                <!-- Expandable Top Products Table -->
+                <div id="topTableBox" class="mt-3 d-none border-top pt-3">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="small fw-semibold text-muted">Product Ranking Detail</div>
+                    <button class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 0.78rem;" onclick="exportTopProductsCSV()">
+                      <i class="bi bi-download me-1"></i>Export CSV
+                    </button>
+                  </div>
+                  <div class="table-responsive" style="max-height: 280px;">
+                    <table class="table table-sm table-hover align-middle mb-0">
+                      <thead class="table-light sticky-top">
+                        <tr>
+                          <th style="width: 45px;">Rank</th>
+                          <th>Product Name</th>
+                          <th class="text-end">Units Sold</th>
+                          <th class="text-end">Revenue</th>
+                          <th style="width: 140px;">Sales Share</th>
+                        </tr>
+                      </thead>
+                      <tbody id="topTableBody"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sales by Category Breakdown -->
+          <div class="col-lg-5">
+            <div class="card shadow-sm h-100">
+              <div class="card-body d-flex flex-column justify-content-between">
+                <div>
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                      <i class="bi bi-tag text-info"></i> Category Share
+                    </h6>
+                    <button id="categoryTableToggleBtn" class="btn btn-sm btn-outline-secondary">
+                      <i class="bi bi-table me-1"></i>Table
+                    </button>
+                  </div>
+                  <small class="text-muted d-block mb-3">Revenue distribution by product categories</small>
+
+                  <div class="chart-container-sm">
+                    <canvas id="categoryChart" aria-label="Category sales distribution chart" role="img"></canvas>
+                  </div>
+                </div>
+
+                <!-- Expandable Category Data Table -->
+                <div id="categoryTableBox" class="mt-3 d-none border-top pt-3">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="small fw-semibold text-muted">Category Breakdown</div>
+                    <button class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 0.78rem;" onclick="exportCategorySalesCSV()">
+                      <i class="bi bi-download me-1"></i>Export CSV
+                    </button>
+                  </div>
+                  <div class="table-responsive" style="max-height: 220px;">
+                    <table class="table table-sm table-hover align-middle mb-0">
+                      <thead class="table-light sticky-top">
+                        <tr>
+                          <th>Category</th>
+                          <th class="text-end">Units</th>
+                          <th class="text-end">Revenue</th>
+                          <th class="text-end">Share</th>
+                        </tr>
+                      </thead>
+                      <tbody id="categoryTableBody"></tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <!-- Category summary highlight text -->
+                <div id="categorySummaryText" class="mt-3 pt-2 border-top text-muted small text-center">
+                  Calculating category share...
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 3: Customer Insights & Top Spenders -->
+        <div class="row g-3">
+          <div class="col-12">
+            <div class="card shadow-sm">
+              <div class="card-body">
+                <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 mb-3">
+                  <div>
+                    <h6 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                      <i class="bi bi-people text-primary"></i> Customer Insights & Top Spenders
+                    </h6>
+                    <small class="text-muted">High-value customers contributing to store revenue</small>
+                  </div>
+                  <a href="customers.html" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-person-lines-fill me-1"></i>Manage Customers &rarr;
+                  </a>
+                </div>
+
+                <div class="table-responsive">
+                  <table class="table table-hover table-sm align-middle mb-0">
+                    <thead class="table-light">
+                      <tr>
+                        <th>Customer</th>
+                        <th>Email</th>
+                        <th class="text-center">Total Orders</th>
+                        <th class="text-end">Total Spent</th>
+                        <th>Last Order Date</th>
+                        <th class="text-center">Tier</th>
+                      </tr>
+                    </thead>
+                    <tbody id="topCustomersTableBody">
+                      <tr><td colspan="6" class="text-center text-muted py-3">Loading customer insights...</td></tr>
+                    </tbody>
                   </table>
                 </div>
               </div>
@@ -81,202 +622,898 @@
     </div>
   </div>
 
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="js/common.js"></script>
   <script>
     requireLogin();
-    renderLayout("reports", "Reports");
+    renderLayout("reports", "Reports & Analytics");
 
-    const css = getComputedStyle(document.documentElement);
-    const COLOR = css.getPropertyValue("--series-1").trim();
-    const TEXT = css.getPropertyValue("--text-secondary").trim();
-    const GRID = css.getPropertyValue("--grid").trim();
-    const AXIS = css.getPropertyValue("--axis").trim();
+    // --- State & Palette Configuration ---
+    const STATE = {
+      period: "30", // '7', '14', '30', '90', 'all', 'custom'
+      startDate: null,
+      endDate: null,
+      salesMetric: "revenue", // 'revenue', 'orders', 'both'
+      salesChartType: "bar",  // 'bar', 'line'
+      topSortBy: "unitsSold", // 'unitsSold', 'revenue'
+      topLimit: 5,
+      // Data caches
+      summary: null,
+      sales: [],
+      topProducts: [],
+      categories: [],
+      topCustomers: []
+    };
 
-    Chart.defaults.font.family = "system-ui, -apple-system, 'Segoe UI', sans-serif";
-    Chart.defaults.color = TEXT;
-
-    let salesChart = null;
-    let topChart = null;
-
-    function showMessage(text, type) {
-      const box = document.getElementById("message");
-      box.className = "alert alert-" + type;
-      box.textContent = text;
-    }
-
-    function rupees(n) {
-      return "Rs " + n.toLocaleString("en-IN");
-    }
-
-    function addCell(row, text) {
-      const cell = document.createElement("td");
-      cell.textContent = text;
-      row.appendChild(cell);
-    }
-
-    // The last N calendar days as YYYY-MM-DD, oldest first
-    function lastDays(n) {
-      const list = [];
-      for (let i = n - 1; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const month = String(d.getMonth() + 1).padStart(2, "0");
-        const day = String(d.getDate()).padStart(2, "0");
-        list.push(d.getFullYear() + "-" + month + "-" + day);
+    const THEME = {
+      brand: "#059669",
+      brandDark: "#047857",
+      brandSoft: "rgba(5, 150, 105, 0.15)",
+      indigo: "#4f46e5",
+      indigoSoft: "rgba(79, 70, 229, 0.15)",
+      sky: "#0284c7",
+      skySoft: "rgba(2, 132, 199, 0.15)",
+      amber: "#f59e0b",
+      rose: "#ef4444",
+      gray: "#9ca3af",
+      grid: "#f3f4f6",
+      axis: "#e5e7eb",
+      text: "#4b5563",
+      colors: [
+        "#059669", "#4f46e5", "#0284c7", "#f59e0b",
+        "#7c3aed", "#e11d48", "#0d9488", "#ea580c",
+        "#8b5cf6", "#06b6d4", "#64748b"
+      ],
+      statusColors: {
+        delivered: "#10b981",
+        shipped: "#3b82f6",
+        pending: "#f59e0b",
+        cancelled: "#ef4444"
       }
-      return list;
+    };
+
+    Chart.defaults.font.family = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+    Chart.defaults.color = THEME.text;
+
+    let salesChartInstance = null;
+    let statusChartInstance = null;
+    let topChartInstance = null;
+    let categoryChartInstance = null;
+
+    // --- Utility Functions ---
+
+    function rupees(num) {
+      return "Rs " + Number(num || 0).toLocaleString("en-IN");
     }
 
-    function shortDate(text) {
-      return new Date(text + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+    function formatDate(dateStr) {
+      if (!dateStr) return "-";
+      const d = new Date(dateStr);
+      return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
     }
 
-    function toggleTable(boxId, buttonId) {
+    function shortDate(dateStr) {
+      if (!dateStr) return "-";
+      const d = new Date(dateStr + "T00:00:00");
+      return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+    }
+
+    function showMessage(text, type = "danger") {
+      const box = document.getElementById("message");
+      const span = document.getElementById("messageText");
+      box.className = `alert alert-${type} alert-dismissible fade show`;
+      span.textContent = text;
+      box.classList.remove("d-none");
+    }
+
+    function hideMessage() {
+      document.getElementById("message").classList.add("d-none");
+    }
+
+    function toggleBox(boxId, btnId, defaultShowText = "Table") {
       const box = document.getElementById(boxId);
-      const button = document.getElementById(buttonId);
-      box.classList.toggle("d-none");
-      button.textContent = box.classList.contains("d-none") ? "Show table" : "Hide table";
+      const btn = document.getElementById(btnId);
+      const isHidden = box.classList.toggle("d-none");
+      btn.innerHTML = isHidden 
+        ? `<i class="bi bi-table me-1"></i>${defaultShowText}` 
+        : `<i class="bi bi-eye-slash me-1"></i>Hide`;
     }
 
-    // ----- Revenue per day -----
+    // Helper: generate list of all dates YYYY-MM-DD in range
+    function generateDateRange(daysCount, startStr = null, endStr = null) {
+      const dates = [];
+      if (startStr && endStr) {
+        const cur = new Date(startStr);
+        const end = new Date(endStr);
+        while (cur <= end) {
+          dates.push(cur.toISOString().split("T")[0]);
+          cur.setDate(cur.getDate() + 1);
+        }
+      } else {
+        const count = typeof daysCount === "number" ? daysCount : 30;
+        for (let i = count - 1; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const yyyy = d.getFullYear();
+          const mm = String(d.getMonth() + 1).padStart(2, "0");
+          const dd = String(d.getDate()).padStart(2, "0");
+          dates.push(`${yyyy}-${mm}-${dd}`);
+        }
+      }
+      return dates;
+    }
 
-    async function loadSales() {
+    // CSV Downloader Helper
+    function downloadCSV(filename, rows) {
+      const csvContent = "data:text/csv;charset=utf-8," +
+        rows.map(row => row.map(val => `"${String(val ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // --- Data Loaders ---
+
+    // 1. Executive Summary & KPIs
+    async function loadSummary() {
       try {
-        const days = Number(document.getElementById("days").value);
-        const data = await api("/reports/sales-by-day?days=" + days);
+        const data = await api("/reports/summary");
+        STATE.summary = data;
+
+        document.getElementById("kpiTotalRevenue").textContent = rupees(data.totalRevenue);
+        document.getElementById("kpiTotalOrders").textContent = data.totalOrders;
+        document.getElementById("kpiAvgOrderValue").textContent = rupees(data.averageOrderValue || 0);
+        document.getElementById("kpiUnitsSold").textContent = (data.totalUnitsSold || 0).toLocaleString("en-IN");
+        document.getElementById("kpiCatalogCount").textContent = `Across ${data.totalProducts || 0} catalog products`;
+
+        const s = data.ordersByStatus || { pending: 0, shipped: 0, delivered: 0, cancelled: 0 };
+        document.getElementById("statusCountDelivered").textContent = s.delivered || 0;
+        document.getElementById("statusCountShipped").textContent = s.shipped || 0;
+        document.getElementById("statusCountPending").textContent = s.pending || 0;
+        document.getElementById("statusCountCancelled").textContent = s.cancelled || 0;
+
+        document.getElementById("kpiOrdersBreakdown").textContent =
+          `${s.delivered || 0} Delivered · ${s.shipped || 0} Shipped · ${s.pending || 0} Pending`;
+
+        // Low stock warning banner
+        if (data.lowStockCount > 0) {
+          const banner = document.getElementById("lowStockBanner");
+          document.getElementById("lowStockText").textContent =
+            `${data.lowStockCount} product(s) are low in stock (10 units or less).`;
+          banner.classList.remove("d-none");
+        }
+
+        renderStatusChart(s);
+      } catch (err) {
+        showMessage("Failed to load executive summary: " + err.message);
+      }
+    }
+
+    // 2. Sales Trend & Daily Velocity
+    async function loadSalesTrend() {
+      try {
+        let query = "";
+        if (STATE.period === "custom" && STATE.startDate && STATE.endDate) {
+          query = `?startDate=${STATE.startDate}&endDate=${STATE.endDate}`;
+        } else if (STATE.period === "all") {
+          query = "?days=all";
+        } else {
+          query = `?days=${STATE.period}`;
+        }
+
+        const data = await api(`/reports/sales-by-day${query}`);
+        STATE.sales = data;
 
         const byDate = {};
-        data.forEach((d) => { byDate[d.date] = d; });
+        data.forEach(d => { byDate[d.date] = d; });
 
-        const rows = lastDays(days).map((date) => ({
-          date: date,
+        let datesList = [];
+        if (STATE.period === "custom" && STATE.startDate && STATE.endDate) {
+          datesList = generateDateRange(0, STATE.startDate, STATE.endDate);
+        } else if (STATE.period === "all") {
+          datesList = data.map(d => d.date);
+          if (datesList.length === 0) datesList = generateDateRange(30);
+        } else {
+          datesList = generateDateRange(Number(STATE.period));
+        }
+
+        const rows = datesList.map(date => ({
+          date,
           orders: byDate[date] ? byDate[date].orders : 0,
           revenue: byDate[date] ? byDate[date].revenue : 0,
+          aov: byDate[date] && byDate[date].orders > 0 ? Math.round(byDate[date].revenue / byDate[date].orders) : 0
         }));
 
-        const total = rows.reduce((sum, r) => sum + r.revenue, 0);
-        document.getElementById("salesNote").textContent =
-          total === 0 ? "No sales in this period." : "Total in this period: " + rupees(total);
-
-        if (salesChart) { salesChart.destroy(); }
-        salesChart = new Chart(document.getElementById("salesChart"), {
-          type: "bar",
-          data: {
-            labels: rows.map((r) => shortDate(r.date)),
-            datasets: [{
-              label: "Revenue",
-              data: rows.map((r) => r.revenue),
-              backgroundColor: COLOR,
-              borderRadius: { topLeft: 4, topRight: 4 },
-              maxBarThickness: 36,
-            }],
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: { display: false },
-              tooltip: {
-                callbacks: {
-                  label: (item) => "Revenue: " + rupees(item.parsed.y),
-                  afterLabel: (item) => "Orders: " + rows[item.dataIndex].orders,
-                },
-              },
-            },
-            scales: {
-              x: { grid: { display: false }, border: { color: AXIS }, ticks: { color: TEXT } },
-              y: {
-                beginAtZero: true,
-                grid: { color: GRID },
-                border: { display: false },
-                ticks: { color: TEXT, callback: (v) => rupees(v) },
-              },
-            },
-          },
+        // Compute summary metrics for this period
+        const periodTotalRevenue = rows.reduce((sum, r) => sum + r.revenue, 0);
+        const periodTotalOrders = rows.reduce((sum, r) => sum + r.orders, 0);
+        const activeDays = rows.filter(r => r.revenue > 0).length;
+        const dailyAvg = activeDays > 0 ? Math.round(periodTotalRevenue / rows.length) : 0;
+        
+        let peakDay = { date: "-", revenue: 0 };
+        rows.forEach(r => {
+          if (r.revenue > peakDay.revenue) peakDay = r;
         });
 
-        const body = document.getElementById("salesTableBody");
-        body.innerHTML = "";
-        rows.forEach((r) => {
-          const row = document.createElement("tr");
-          addCell(row, shortDate(r.date));
-          addCell(row, r.orders);
-          addCell(row, rupees(r.revenue));
-          body.appendChild(row);
-        });
+        document.getElementById("kpiPeriodRevenue").textContent = `Period: ${rupees(periodTotalRevenue)}`;
+        document.getElementById("salesSummaryTotal").textContent = rupees(periodTotalRevenue);
+        document.getElementById("salesSummaryOrders").textContent = periodTotalOrders;
+        document.getElementById("salesSummaryPeak").textContent = peakDay.revenue > 0 ? `${shortDate(peakDay.date)} (${rupees(peakDay.revenue)})` : "None";
+        document.getElementById("salesSummaryDailyAvg").textContent = rupees(dailyAvg);
+
+        renderSalesChart(rows);
+        renderSalesTable(rows);
       } catch (err) {
-        showMessage(err.message, "danger");
+        showMessage("Failed to load sales trend: " + err.message);
       }
     }
 
-    // ----- Top products -----
-
-    async function loadTop() {
+    // 3. Top Products
+    async function loadTopProducts() {
       try {
-        const products = await api("/reports/top-products?limit=5");
+        let query = `?limit=${STATE.topLimit}&sortBy=${STATE.topSortBy}`;
+        if (STATE.period === "custom" && STATE.startDate && STATE.endDate) {
+          query += `&startDate=${STATE.startDate}&endDate=${STATE.endDate}`;
+        } else if (STATE.period !== "all") {
+          query += `&days=${STATE.period}`;
+        }
 
-        document.getElementById("topNote").textContent =
-          products.length === 0 ? "No sales yet." : "Top " + products.length + " products";
+        const products = await api(`/reports/top-products${query}`);
+        STATE.topProducts = products;
 
-        if (topChart) { topChart.destroy(); }
-        topChart = new Chart(document.getElementById("topChart"), {
-          type: "bar",
-          data: {
-            labels: products.map((p) => p.name),
-            datasets: [{
-              label: "Units sold",
-              data: products.map((p) => p.unitsSold),
-              backgroundColor: COLOR,
-              borderRadius: { topRight: 4, bottomRight: 4 },
-              maxBarThickness: 28,
-            }],
-          },
-          options: {
-            indexAxis: "y",
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: { display: false },
-              tooltip: {
-                callbacks: {
-                  label: (item) => "Units sold: " + item.parsed.x,
-                  afterLabel: (item) => "Revenue: " + rupees(products[item.dataIndex].revenue),
-                },
-              },
-            },
-            scales: {
-              x: {
-                beginAtZero: true,
-                grid: { color: GRID },
-                border: { display: false },
-                ticks: { color: TEXT, precision: 0 },
-              },
-              y: { grid: { display: false }, border: { color: AXIS }, ticks: { color: TEXT } },
-            },
-          },
-        });
+        document.getElementById("topProductsSub").textContent =
+          products.length === 0 ? "No product sales recorded in this period" : `Top ${products.length} products by ${STATE.topSortBy === "revenue" ? "revenue" : "units sold"}`;
 
-        const body = document.getElementById("topTableBody");
-        body.innerHTML = "";
-        products.forEach((p) => {
-          const row = document.createElement("tr");
-          addCell(row, p.name);
-          addCell(row, p.unitsSold);
-          addCell(row, rupees(p.revenue));
-          body.appendChild(row);
-        });
+        renderTopChart(products);
+        renderTopTable(products);
       } catch (err) {
-        showMessage(err.message, "danger");
+        showMessage("Failed to load top products: " + err.message);
       }
     }
 
-    document.getElementById("days").addEventListener("change", loadSales);
-    document.getElementById("salesTableBtn").addEventListener("click", () => toggleTable("salesTableBox", "salesTableBtn"));
-    document.getElementById("topTableBtn").addEventListener("click", () => toggleTable("topTableBox", "topTableBtn"));
+    // 4. Category Sales
+    async function loadCategorySales() {
+      try {
+        let query = "";
+        if (STATE.period === "custom" && STATE.startDate && STATE.endDate) {
+          query = `?startDate=${STATE.startDate}&endDate=${STATE.endDate}`;
+        } else if (STATE.period !== "all") {
+          query = `?days=${STATE.period}`;
+        }
 
-    loadSales();
-    loadTop();
+        const categories = await api(`/reports/category-sales${query}`);
+        STATE.categories = categories;
+
+        renderCategoryChart(categories);
+        renderCategoryTable(categories);
+      } catch (err) {
+        showMessage("Failed to load category sales: " + err.message);
+      }
+    }
+
+    // 5. Top Customers Insights
+    async function loadTopCustomers() {
+      try {
+        const customers = await api("/reports/top-customers?limit=8");
+        STATE.topCustomers = customers;
+
+        const tbody = document.getElementById("topCustomersTableBody");
+        tbody.innerHTML = "";
+
+        if (customers.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-3">No customer orders recorded yet.</td></tr>`;
+          return;
+        }
+
+        customers.forEach((c, idx) => {
+          const tr = document.createElement("tr");
+          let tierBadge = '<span class="badge bg-secondary">Silver</span>';
+          if (c.totalSpent >= 100000) {
+            tierBadge = '<span class="badge bg-warning text-dark"><i class="bi bi-star-fill me-1"></i>VIP Platinum</span>';
+          } else if (c.totalSpent >= 30000) {
+            tierBadge = '<span class="badge bg-info text-dark">Gold</span>';
+          }
+
+          tr.innerHTML = `
+            <td>
+              <div class="d-flex align-items-center gap-2">
+                <span class="rank-badge rank-${idx + 1 <= 3 ? idx + 1 : 'other'}">${idx + 1}</span>
+                <span class="fw-semibold text-dark">${c.customerName || "Anonymous"}</span>
+              </div>
+            </td>
+            <td class="text-muted small">${c.email || "-"}</td>
+            <td class="text-center fw-semibold">${c.totalOrders || 0}</td>
+            <td class="text-end fw-bold text-success">${rupees(c.totalSpent)}</td>
+            <td class="text-muted small">${formatDate(c.lastOrderDate)}</td>
+            <td class="text-center">${tierBadge}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        // Customer endpoint is optional enhancement
+        document.getElementById("topCustomersTableBody").innerHTML =
+          `<tr><td colspan="6" class="text-center text-muted py-3">Customer insights unavailable.</td></tr>`;
+      }
+    }
+
+    // --- Chart Rendering Logic ---
+
+    // Render 1: Sales & Revenue Trend
+    function renderSalesChart(rows) {
+      if (salesChartInstance) salesChartInstance.destroy();
+
+      const labels = rows.map(r => shortDate(r.date));
+      const revenues = rows.map(r => r.revenue);
+      const orders = rows.map(r => r.orders);
+
+      const isLine = STATE.salesChartType === "line";
+      const datasets = [];
+
+      if (STATE.salesMetric === "revenue" || STATE.salesMetric === "both") {
+        datasets.push({
+          label: "Revenue",
+          data: revenues,
+          type: isLine ? "line" : "bar",
+          yAxisID: "y",
+          backgroundColor: isLine ? THEME.brandSoft : THEME.brand,
+          borderColor: THEME.brand,
+          borderWidth: isLine ? 2.5 : 0,
+          fill: isLine,
+          tension: 0.35,
+          borderRadius: isLine ? 0 : { topLeft: 4, topRight: 4 },
+          maxBarThickness: 34,
+          pointRadius: isLine ? 3 : 0,
+          pointHoverRadius: 6,
+        });
+      }
+
+      if (STATE.salesMetric === "orders" || STATE.salesMetric === "both") {
+        datasets.push({
+          label: "Orders Count",
+          data: orders,
+          type: isLine ? "line" : "bar",
+          yAxisID: STATE.salesMetric === "both" ? "y1" : "y",
+          backgroundColor: isLine ? THEME.indigoSoft : THEME.indigo,
+          borderColor: THEME.indigo,
+          borderWidth: isLine ? 2.5 : 0,
+          fill: isLine,
+          tension: 0.35,
+          borderRadius: isLine ? 0 : { topLeft: 4, topRight: 4 },
+          maxBarThickness: 34,
+          pointRadius: isLine ? 3 : 0,
+          pointHoverRadius: 6,
+        });
+      }
+
+      salesChartInstance = new Chart(document.getElementById("salesChart"), {
+        data: { labels, datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: {
+            legend: {
+              display: STATE.salesMetric === "both",
+              position: "top",
+              labels: { boxWidth: 12, usePointStyle: true }
+            },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => {
+                  const ds = ctx.dataset;
+                  if (ds.label === "Revenue") return `Revenue: ${rupees(ctx.parsed.y)}`;
+                  return `Orders: ${ctx.parsed.y}`;
+                },
+                afterLabel: (ctx) => {
+                  const item = rows[ctx.dataIndex];
+                  if (STATE.salesMetric !== "both") {
+                    if (STATE.salesMetric === "revenue") return `Orders: ${item.orders} | Avg: ${rupees(item.aov)}`;
+                    return `Revenue: ${rupees(item.revenue)}`;
+                  }
+                  return `Avg / Order: ${rupees(item.aov)}`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              border: { color: THEME.axis },
+              ticks: { maxRotation: 45, autoSkip: true }
+            },
+            y: {
+              beginAtZero: true,
+              grid: { color: THEME.grid },
+              border: { display: false },
+              ticks: {
+                callback: (v) => STATE.salesMetric === "orders" ? v : rupees(v)
+              }
+            },
+            y1: {
+              display: STATE.salesMetric === "both",
+              position: "right",
+              beginAtZero: true,
+              grid: { display: false },
+              border: { display: false },
+              ticks: { precision: 0 }
+            }
+          }
+        }
+      });
+    }
+
+    function renderSalesTable(rows) {
+      const tbody = document.getElementById("salesTableBody");
+      tbody.innerHTML = "";
+      rows.forEach(r => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><strong>${formatDate(r.date)}</strong></td>
+          <td class="text-end">${r.orders}</td>
+          <td class="text-end fw-semibold text-success">${rupees(r.revenue)}</td>
+          <td class="text-end text-muted">${rupees(r.aov)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Render 2: Order Fulfillment Status
+    function renderStatusChart(statusMap) {
+      if (statusChartInstance) statusChartInstance.destroy();
+
+      const labels = ["Delivered", "Shipped", "Pending", "Cancelled"];
+      const counts = [
+        statusMap.delivered || 0,
+        statusMap.shipped || 0,
+        statusMap.pending || 0,
+        statusMap.cancelled || 0
+      ];
+
+      const totalOrders = counts.reduce((a, b) => a + b, 0);
+      const activeOrders = (statusMap.delivered || 0) + (statusMap.shipped || 0);
+      const fulfillmentRate = totalOrders > 0 ? Math.round((activeOrders / totalOrders) * 100) : 100;
+
+      const badge = document.getElementById("fulfillmentBadge");
+      badge.textContent = `${fulfillmentRate}% fulfilled/active`;
+
+      statusChartInstance = new Chart(document.getElementById("statusChart"), {
+        type: "doughnut",
+        data: {
+          labels,
+          datasets: [{
+            data: totalOrders === 0 ? [1] : counts,
+            backgroundColor: totalOrders === 0 ? ["#e5e7eb"] : [
+              THEME.statusColors.delivered,
+              THEME.statusColors.shipped,
+              THEME.statusColors.pending,
+              THEME.statusColors.cancelled
+            ],
+            borderWidth: 2,
+            borderColor: "#ffffff"
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: "70%",
+          plugins: {
+            legend: { position: "bottom", labels: { boxWidth: 10, padding: 12 } },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => {
+                  if (totalOrders === 0) return "No orders yet";
+                  const val = counts[ctx.dataIndex];
+                  const pct = Math.round((val / totalOrders) * 100);
+                  return `${labels[ctx.dataIndex]}: ${val} (${pct}%)`;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // Render 3: Top Selling Products
+    function renderTopChart(products) {
+      if (topChartInstance) topChartInstance.destroy();
+
+      const isRevenue = STATE.topSortBy === "revenue";
+      const labels = products.map(p => p.name.length > 24 ? p.name.slice(0, 24) + "..." : p.name);
+      const values = products.map(p => isRevenue ? p.revenue : p.unitsSold);
+
+      topChartInstance = new Chart(document.getElementById("topChart"), {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [{
+            label: isRevenue ? "Revenue" : "Units Sold",
+            data: values,
+            backgroundColor: THEME.brand,
+            borderRadius: { topRight: 4, bottomRight: 4 },
+            maxBarThickness: 28
+          }]
+        },
+        options: {
+          indexAxis: "y",
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => {
+                  const p = products[ctx.dataIndex];
+                  return `${isRevenue ? 'Revenue: ' + rupees(p.revenue) : 'Units Sold: ' + p.unitsSold}`;
+                },
+                afterLabel: (ctx) => {
+                  const p = products[ctx.dataIndex];
+                  return `${isRevenue ? 'Units Sold: ' + p.unitsSold : 'Revenue: ' + rupees(p.revenue)}`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              beginAtZero: true,
+              grid: { color: THEME.grid },
+              border: { display: false },
+              ticks: {
+                precision: 0,
+                callback: (v) => isRevenue ? rupees(v) : v
+              }
+            },
+            y: { grid: { display: false }, border: { color: THEME.axis } }
+          }
+        }
+      });
+    }
+
+    function renderTopTable(products) {
+      const tbody = document.getElementById("topTableBody");
+      tbody.innerHTML = "";
+
+      if (products.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">No products sold in this period.</td></tr>`;
+        return;
+      }
+
+      const totalRevenue = products.reduce((sum, p) => sum + p.revenue, 0);
+
+      products.forEach((p, idx) => {
+        const tr = document.createElement("tr");
+        const pct = totalRevenue > 0 ? Math.round((p.revenue / totalRevenue) * 100) : 0;
+
+        tr.innerHTML = `
+          <td><span class="rank-badge rank-${idx + 1 <= 3 ? idx + 1 : 'other'}">${idx + 1}</span></td>
+          <td class="fw-semibold text-dark">${p.name}</td>
+          <td class="text-end">${p.unitsSold}</td>
+          <td class="text-end fw-bold text-success">${rupees(p.revenue)}</td>
+          <td>
+            <div class="d-flex align-items-center gap-2">
+              <div class="progress flex-grow-1" style="height: 6px;">
+                <div class="progress-bar bg-success" style="width: ${pct}%"></div>
+              </div>
+              <span class="small text-muted" style="width: 32px;">${pct}%</span>
+            </div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Render 4: Category Share
+    function renderCategoryChart(categories) {
+      if (categoryChartInstance) categoryChartInstance.destroy();
+
+      const labels = categories.map(c => c.category || "General");
+      const values = categories.map(c => c.revenue);
+      const total = values.reduce((sum, v) => sum + v, 0);
+
+      const summaryText = document.getElementById("categorySummaryText");
+      if (categories.length > 0) {
+        const topCat = categories[0];
+        const topShare = total > 0 ? Math.round((topCat.revenue / total) * 100) : 0;
+        summaryText.innerHTML = `Top category: <strong class="text-dark">${topCat.category}</strong> (${topShare}% of period revenue)`;
+      } else {
+        summaryText.textContent = "No category sales recorded in this period.";
+      }
+
+      categoryChartInstance = new Chart(document.getElementById("categoryChart"), {
+        type: "doughnut",
+        data: {
+          labels,
+          datasets: [{
+            data: total === 0 ? [1] : values,
+            backgroundColor: total === 0 ? ["#e5e7eb"] : THEME.colors.slice(0, categories.length),
+            borderWidth: 2,
+            borderColor: "#ffffff"
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: "65%",
+          plugins: {
+            legend: { position: "bottom", labels: { boxWidth: 10, padding: 10 } },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => {
+                  if (total === 0) return "No sales";
+                  const cat = categories[ctx.dataIndex];
+                  const pct = total > 0 ? Math.round((cat.revenue / total) * 100) : 0;
+                  return `${cat.category}: ${rupees(cat.revenue)} (${pct}%)`;
+                },
+                afterLabel: (ctx) => {
+                  const cat = categories[ctx.dataIndex];
+                  return `Units: ${cat.unitsSold} across ${cat.ordersCount || 1} orders`;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function renderCategoryTable(categories) {
+      const tbody = document.getElementById("categoryTableBody");
+      tbody.innerHTML = "";
+
+      if (categories.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted py-3">No category data.</td></tr>`;
+        return;
+      }
+
+      const totalRevenue = categories.reduce((sum, c) => sum + c.revenue, 0);
+
+      categories.forEach(c => {
+        const tr = document.createElement("tr");
+        const pct = totalRevenue > 0 ? Math.round((c.revenue / totalRevenue) * 100) : 0;
+
+        tr.innerHTML = `
+          <td class="fw-semibold text-dark">${c.category}</td>
+          <td class="text-end">${c.unitsSold}</td>
+          <td class="text-end fw-semibold text-success">${rupees(c.revenue)}</td>
+          <td class="text-end text-muted">${pct}%</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // --- Master Refresh ---
+    async function refreshAll() {
+      const icon = document.getElementById("refreshIcon");
+      icon.classList.add("spin");
+      hideMessage();
+
+      // Update print report date
+      document.getElementById("printReportDate").textContent =
+        `Generated on ${new Date().toLocaleDateString("en-IN", { dateStyle: "long", timeStyle: "short" })}`;
+
+      try {
+        await Promise.all([
+          loadSummary(),
+          loadSalesTrend(),
+          loadTopProducts(),
+          loadCategorySales(),
+          loadTopCustomers(),
+        ]);
+      } catch (err) {
+        showMessage("An error occurred while loading reports: " + err.message);
+      } finally {
+        icon.classList.remove("spin");
+      }
+    }
+
+    // --- CSV Export Functions ---
+    function exportDailySalesCSV() {
+      if (!STATE.sales || STATE.sales.length === 0) {
+        alert("No daily sales data to export.");
+        return;
+      }
+      const headers = ["Date", "Orders Count", "Revenue (INR)", "Average Order Value (INR)"];
+      const rows = [headers];
+      STATE.sales.forEach(s => {
+        const aov = s.orders > 0 ? Math.round(s.revenue / s.orders) : 0;
+        rows.push([s.date, s.orders, s.revenue, aov]);
+      });
+      downloadCSV(`TechMart_Sales_Daily_${STATE.period}.csv`, rows);
+    }
+
+    function exportTopProductsCSV() {
+      if (!STATE.topProducts || STATE.topProducts.length === 0) {
+        alert("No top products data to export.");
+        return;
+      }
+      const headers = ["Rank", "Product Name", "Units Sold", "Revenue (INR)"];
+      const rows = [headers];
+      STATE.topProducts.forEach((p, idx) => {
+        rows.push([idx + 1, p.name, p.unitsSold, p.revenue]);
+      });
+      downloadCSV(`TechMart_Top_Products.csv`, rows);
+    }
+
+    function exportCategorySalesCSV() {
+      if (!STATE.categories || STATE.categories.length === 0) {
+        alert("No category data to export.");
+        return;
+      }
+      const headers = ["Category", "Units Sold", "Revenue (INR)", "Orders Count"];
+      const rows = [headers];
+      STATE.categories.forEach(c => {
+        rows.push([c.category, c.unitsSold, c.revenue, c.ordersCount || 1]);
+      });
+      downloadCSV(`TechMart_Category_Sales.csv`, rows);
+    }
+
+    function exportFullSummaryCSV() {
+      const s = STATE.summary;
+      if (!s) {
+        alert("Executive summary data not loaded yet.");
+        return;
+      }
+      const rows = [
+        ["TechMart Executive Analytics Report"],
+        ["Generated", new Date().toISOString()],
+        ["Period Filter", STATE.period],
+        [],
+        ["Metric", "Value"],
+        ["Total Lifetime Revenue (INR)", s.totalRevenue || 0],
+        ["Total Orders Count", s.totalOrders || 0],
+        ["Total Units Sold", s.totalUnitsSold || 0],
+        ["Average Order Value (INR)", s.averageOrderValue || 0],
+        ["Catalog Total Products", s.totalProducts || 0],
+        ["Low Stock Items (<=10)", s.lowStockCount || 0],
+        ["Orders Delivered", s.ordersByStatus?.delivered || 0],
+        ["Orders Shipped", s.ordersByStatus?.shipped || 0],
+        ["Orders Pending", s.ordersByStatus?.pending || 0],
+        ["Orders Cancelled", s.ordersByStatus?.cancelled || 0],
+      ];
+      downloadCSV(`TechMart_Executive_Summary.csv`, rows);
+    }
+
+    // --- Event Listeners Wiring ---
+
+    // Period buttons
+    document.querySelectorAll(".period-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        if (btn.id === "customRangeBtn") {
+          document.getElementById("customDateBox").classList.toggle("d-none");
+          return;
+        }
+
+        document.getElementById("customDateBox").classList.add("d-none");
+        document.querySelectorAll(".period-btn").forEach(b => b.classList.remove("active", "btn-success"));
+        document.querySelectorAll(".period-btn").forEach(b => b.classList.add("btn-outline-secondary"));
+        btn.classList.add("active", "btn-success");
+        btn.classList.remove("btn-outline-secondary");
+
+        STATE.period = btn.getAttribute("data-days");
+        STATE.startDate = null;
+        STATE.endDate = null;
+
+        const labelMap = {
+          "7": "Showing: Last 7 days",
+          "14": "Showing: Last 14 days",
+          "30": "Showing: Last 30 days",
+          "90": "Showing: Last 90 days",
+          "all": "Showing: All Time Sales"
+        };
+        document.getElementById("periodLabel").textContent = labelMap[STATE.period] || `Showing: Last ${STATE.period} days`;
+
+        loadSalesTrend();
+        loadTopProducts();
+        loadCategorySales();
+      });
+    });
+
+    // Custom date range apply / cancel
+    document.getElementById("applyCustomDateBtn").addEventListener("click", () => {
+      const start = document.getElementById("customStartDate").value;
+      const end = document.getElementById("customEndDate").value;
+
+      if (!start || !end) {
+        showMessage("Please select both a start and an end date.", "warning");
+        return;
+      }
+      if (new Date(start) > new Date(end)) {
+        showMessage("Start date cannot be after end date.", "warning");
+        return;
+      }
+
+      STATE.period = "custom";
+      STATE.startDate = start;
+      STATE.endDate = end;
+
+      document.querySelectorAll(".period-btn").forEach(b => b.classList.remove("active", "btn-success"));
+      document.querySelectorAll(".period-btn").forEach(b => b.classList.add("btn-outline-secondary"));
+      document.getElementById("customRangeBtn").classList.add("active", "btn-success");
+      document.getElementById("customRangeBtn").classList.remove("btn-outline-secondary");
+
+      document.getElementById("periodLabel").textContent = `Custom: ${formatDate(start)} - ${formatDate(end)}`;
+
+      loadSalesTrend();
+      loadTopProducts();
+      loadCategorySales();
+    });
+
+    document.getElementById("cancelCustomDateBtn").addEventListener("click", () => {
+      document.getElementById("customDateBox").classList.add("d-none");
+    });
+
+    // Sales Trend Metric Toggles
+    document.getElementById("btnMetricRevenue").addEventListener("click", function() {
+      STATE.salesMetric = "revenue";
+      [this, document.getElementById("btnMetricOrders"), document.getElementById("btnMetricBoth")].forEach(b => b.classList.remove("active"));
+      this.classList.add("active");
+      loadSalesTrend();
+    });
+
+    document.getElementById("btnMetricOrders").addEventListener("click", function() {
+      STATE.salesMetric = "orders";
+      [this, document.getElementById("btnMetricRevenue"), document.getElementById("btnMetricBoth")].forEach(b => b.classList.remove("active"));
+      this.classList.add("active");
+      loadSalesTrend();
+    });
+
+    document.getElementById("btnMetricBoth").addEventListener("click", function() {
+      STATE.salesMetric = "both";
+      [this, document.getElementById("btnMetricRevenue"), document.getElementById("btnMetricOrders")].forEach(b => b.classList.remove("active"));
+      this.classList.add("active");
+      loadSalesTrend();
+    });
+
+    // Sales Chart Type Toggles
+    document.getElementById("btnTypeBar").addEventListener("click", function() {
+      STATE.salesChartType = "bar";
+      this.classList.add("active");
+      document.getElementById("btnTypeLine").classList.remove("active");
+      loadSalesTrend();
+    });
+
+    document.getElementById("btnTypeLine").addEventListener("click", function() {
+      STATE.salesChartType = "line";
+      this.classList.add("active");
+      document.getElementById("btnTypeBar").classList.remove("active");
+      loadSalesTrend();
+    });
+
+    // Top Products Sort Toggles
+    document.getElementById("btnSortUnits").addEventListener("click", function() {
+      STATE.topSortBy = "unitsSold";
+      this.classList.add("active");
+      document.getElementById("btnSortRevenue").classList.remove("active");
+      loadTopProducts();
+    });
+
+    document.getElementById("btnSortRevenue").addEventListener("click", function() {
+      STATE.topSortBy = "revenue";
+      this.classList.add("active");
+      document.getElementById("btnSortUnits").classList.remove("active");
+      loadTopProducts();
+    });
+
+    // Top Products Limit Select
+    document.getElementById("topLimitSelect").addEventListener("change", function() {
+      STATE.topLimit = Number(this.value);
+      loadTopProducts();
+    });
+
+    // Table Toggles
+    document.getElementById("salesTableToggleBtn").addEventListener("click", () => toggleBox("salesTableBox", "salesTableToggleBtn", "Table"));
+    document.getElementById("topTableToggleBtn").addEventListener("click", () => toggleBox("topTableBox", "topTableToggleBtn", "Table"));
+    document.getElementById("categoryTableToggleBtn").addEventListener("click", () => toggleBox("categoryTableBox", "categoryTableToggleBtn", "Table"));
+
+    // Refresh Button
+    document.getElementById("refreshBtn").addEventListener("click", refreshAll);
+
+    // Initial Load
+    refreshAll();
   </script>
 </body>
 </html>
