@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>TechMart Dashboard</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
@@ -98,6 +98,39 @@
     .spin {
       display: inline-block;
       animation: spinAnim 0.75s linear infinite;
+    }
+
+    /* ---- 2026 Mobile Responsive Additions ---- */
+    @media (max-width: 576px) {
+      .kpi-card { padding: 14px 16px; }
+      .kpi-card .fs-4 { font-size: 1.3rem !important; }
+      .chart-container-trend { height: 200px; }
+      .chart-container-donut { height: 180px; }
+      main.p-4 { padding: 12px !important; }
+      .shortcut-card { padding: 10px 12px; font-size: 0.88rem; }
+    }
+
+    /* Touch-friendly targets */
+    .btn { min-height: 40px; }
+    .period-btn { min-height: 36px; min-width: 44px; }
+
+    /* Table overflow in dashboard tables */
+    .table-responsive-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; }
+    }
+
+    /* Safe area for notched phones */
+    body {
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
+    }
+
+    @media print {
+      #sidebar, #topbar { display: none !important; }
+      .flex-grow-1 { margin: 0 !important; }
+      main { padding: 0 !important; }
     }
   </style>
 </head>
